@@ -14,7 +14,7 @@ from uwhelper.repo import cases as cases_repo
 from uwhelper.repo import facts as repo
 from uwhelper.repo.cases import ValidationFailure
 from uwhelper.web.app import get_db, redirect, render
-from uwhelper.web.forms import checkbox, form_dict, validate
+from uwhelper.web.forms import checkbox, form_dict, read_form, validate
 from uwhelper.web.routes.cases import case_context
 
 router = APIRouter()
@@ -83,18 +83,18 @@ async def fact_action(request: Request, case_id: str, fact_id: str, action: str)
 
 @router.post("/cases/{case_id}/facts/verify-bulk")
 async def verify_bulk(request: Request, case_id: str):
-    form = await request.form()
-    ids = [str(x) for x in form.getlist("fact_ids")]
-    if not ids:
-        raise ValidationFailure("Select at least one fact.")
-    done = 0
-    with get_db(request).session() as conn:
-        for fid in ids[:200]:
-            fact = repo.get_fact(conn, case_id, fid)
-            if fact["status"] == "candidate":
-                repo.verify_fact(conn, case_id, fid, "Bulk verification after source review")
-                done += 1
-    return redirect(f"/cases/{case_id}/review", f"{done} fact(s) verified.")
+    async with read_form(request) as form:
+        ids = [str(x) for x in form.getlist("fact_ids")]
+        if not ids:
+            raise ValidationFailure("Select at least one fact.")
+        done = 0
+        with get_db(request).session() as conn:
+            for fid in ids[:200]:
+                fact = repo.get_fact(conn, case_id, fid)
+                if fact["status"] == "candidate":
+                    repo.verify_fact(conn, case_id, fid, "Bulk verification after source review")
+                    done += 1
+        return redirect(f"/cases/{case_id}/review", f"{done} fact(s) verified.")
 
 
 @router.get("/cases/{case_id}/facts/{fact_id}/history")
@@ -179,15 +179,15 @@ async def contradictions(request: Request, case_id: str):
 
 @router.post("/cases/{case_id}/contradictions/resolve")
 async def resolve(request: Request, case_id: str):
-    form = await request.form()
-    keep = str(form.get("keep_fact_id") or "")
-    others = [str(x) for x in form.getlist("group_fact_ids") if str(x) != keep]
-    reason = str(form.get("reason") or "")
-    if not keep:
-        raise ValidationFailure("Choose which value is supported by the evidence.")
-    with get_db(request).session() as conn:
-        repo.resolve_contradiction(conn, case_id, keep, others, reason)
-    return redirect(f"/cases/{case_id}/contradictions", "Contradiction resolved with a documented reason.")
+    async with read_form(request) as form:
+        keep = str(form.get("keep_fact_id") or "")
+        others = [str(x) for x in form.getlist("group_fact_ids") if str(x) != keep]
+        reason = str(form.get("reason") or "")
+        if not keep:
+            raise ValidationFailure("Choose which value is supported by the evidence.")
+        with get_db(request).session() as conn:
+            repo.resolve_contradiction(conn, case_id, keep, others, reason)
+        return redirect(f"/cases/{case_id}/contradictions", "Contradiction resolved with a documented reason.")
 
 
 @router.get("/cases/{case_id}/missing")

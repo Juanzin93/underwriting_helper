@@ -19,7 +19,12 @@ structuring, due diligence, closing, funding and servicing — entirely on your 
 * manages policy-defined **due-diligence and closing conditions** with human-only waivers;
 * confirms **funding** only on explicit human confirmation, then **services** the loan: schedules, actual payments
   (manual or CSV), delinquency, modifications, covenants, monitoring alerts and a portfolio view;
-* keeps a **hash-chained (tamper-evident) audit log**.
+* keeps a **hash-chained (tamper-evident) audit log**;
+* tracks **organizations, contacts and deals** (brokerage pipeline with human-authorized approval/decline/funding),
+  with a local JSON API (`/api/v1`) and a `/health` endpoint.
+
+Step-by-step Windows install, configuration, backup and restore: **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**.
+Plan and risks: [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE_ASSESSMENT.md](docs/ARCHITECTURE_ASSESSMENT.md).
 
 > **It is not an autonomous lender, a substitute for legal advice, or a guarantee of regulatory compliance.**
 > **It is not a credit decision-maker.** The model never approves or denies. A clean screen is shown as
@@ -47,7 +52,7 @@ ollama pull qwen3:8b                 # ~5 GB download; use qwen3:4b on GPUs with
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
-`setup.ps1` creates `.venv`, installs dependencies, installs a git hook that blocks committing documents,
+`setup.ps1` creates `.venv`, installs the exact tested versions from `requirements.lock`, installs a git hook that blocks committing documents,
 creates the database, runs the test suite and prints a local-only health check (`uwhelper doctor`).
 Use `scripts\setup.ps1 -Model qwen3:4b -PullModel` to configure and download the smaller model.
 
@@ -55,7 +60,7 @@ Manual equivalent:
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python -m pip install -r requirements.lock
 .\.venv\Scripts\python -m pip install -e . --no-deps
 .\.venv\Scripts\python -m uwhelper init
 ```
@@ -91,7 +96,7 @@ record or import payments, covenants, alerts) → **Portfolio** (top menu).
 ## 3. Tests
 
 ```powershell
-scripts\run_tests.ps1                # 222 tests; no Ollama or internet needed
+scripts\run_tests.ps1                # 257 tests (2 need Ollama); no Ollama or internet needed
 scripts\run_tests.ps1 -Ollama        # also runs live tests against your local model
 # or: .\.venv\Scripts\python -m pytest -q
 ```
@@ -114,8 +119,9 @@ scripts\run_tests.ps1 -Ollama        # also runs live tests against your local m
 ## 5. Configuration
 
 Data lives **outside the repository** in `%LOCALAPPDATA%\UWHelper` (database, documents, reports, log).
-Override with `UWH_DATA_DIR` or `--data-dir`. Settings come from `%LOCALAPPDATA%\UWHelper\uwhelper.toml`
-and `UWH_*` environment variables, e.g.:
+Override with `UWH_DATA_DIR` or `--data-dir` (or `UWH_DB_FILE` / `UWH_DOCUMENTS_PATH` for those two alone).
+Settings come from `%LOCALAPPDATA%\UWHelper\uwhelper.toml`, a `.env` file (copy `.env.example`) and `UWH_*`
+environment variables, in that order of precedence (later wins), e.g.:
 
 ```toml
 ollama_model = "qwen3:4b"        # any locally pulled model; "...cloud" models are refused
@@ -127,13 +133,25 @@ port = 8765
 ```
 
 The Ollama URL must be loopback (`http://127.0.0.1:11434`); the app refuses anything else, and refuses to
-bind to a non-loopback address unless `UWH_ALLOW_NON_LOOPBACK_BIND=1` (not recommended).
+bind to a non-loopback address unless `UWH_ALLOW_NON_LOOPBACK_BIND=1` (not recommended). Optional external
+integrations are off and need both `UWH_EXTERNAL_INTEGRATIONS_ALLOWED=true` and a name in `UWH_ENABLED_INTEGRATIONS`;
+none are implemented yet.
+
+### Local JSON API and health
+
+`GET /health` → `ok` / `degraded` (Ollama or OCR missing; everything else works) / HTTP 503 (database unavailable).
+`/api/v1` covers organizations, contacts, deals (status changes, contacts, documents, underwriting file) and the
+pipeline. Writes need the `X-CSRF-Token` header from `GET /api/v1/session`. Errors always look like
+`{"error": {"code", "message", "details", "request_id"}}` with a matching `X-Request-ID` header.
 
 ## 6. Architecture
 
 ```
 src/uwhelper/
-  config.py            settings + loopback/cloud-model validation
+  config.py            settings (.env/toml/env) + loopback/cloud-model/integration validation
+  core/                error envelope, request IDs
+  crm/                 organizations, contacts, deals, deal pipeline (brokerage)
+  integrations/        disabled-by-default registry for future opt-in adapters (none implemented)
   db/                  SQLite connection, transactions, checksum-verified migrations (migrations/*.sql)
   domain/              Decimal money parsing/rounding, enums, Pydantic input models
   modules/             lending-module interface + commercial module (fields, loan types, checklist)
@@ -160,9 +178,9 @@ periods, verified-only) → metrics (Python) → policy engine → immutable run
 closing → human-confirmed funding → servicing.**
 
 Upgrading an existing installation: pull the new code, run `pip install -e . --no-deps`, back up, then start the app —
-migrations 0002–0006 run automatically and existing cases start in INTAKE (nothing is deleted).
+migrations 0002–0007 run automatically, existing cases start in INTAKE and keep working without a deal (nothing is deleted).
 
-More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with ER diagram), [docs/METRICS.md](docs/METRICS.md),
+More detail: [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md), [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE_ASSESSMENT.md](docs/ARCHITECTURE_ASSESSMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with ER diagram), [docs/METRICS.md](docs/METRICS.md),
 [docs/POLICIES.md](docs/POLICIES.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/OPERATIONS.md](docs/OPERATIONS.md),
 [docs/LIFECYCLE.md](docs/LIFECYCLE.md), [docs/SERVICING.md](docs/SERVICING.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), [docs/LOCAL_ONLY_CHECKLIST.md](docs/LOCAL_ONLY_CHECKLIST.md),
 [docs/LICENSING.md](docs/LICENSING.md), [docs/STATUS.md](docs/STATUS.md) (milestones, limitations, unfinished features).

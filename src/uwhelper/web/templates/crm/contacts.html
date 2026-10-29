@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Contacts{% endblock %}
+{% block content %}
+<h1>Contacts</h1>
+<form method="get" class="actions panel"><input type="text" name="q" value="{{ q }}" placeholder="Search name or email" aria-label="Search"><button class="small secondary">Search</button></form>
+<table><tr><th>Name</th><th>Type</th><th>Organization</th><th>Email</th><th>Phone</th></tr>
+{% for c in contacts %}<tr><td><a href="/contacts/{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</a>{% if c.title %}<br><span class="small">{{ c.title }}</span>{% endif %}</td><td>{{ c.contact_type.replace('_',' ') }}</td><td>{{ c.organization_name or '—' }}</td><td class="small">{{ c.email or '' }}</td><td class="small">{{ c.phone or '' }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No contacts yet.</td></tr>{% endfor %}</table>
+<details class="panel" {% if not contacts %}open{% endif %}><summary>New contact</summary>
+<form method="post" action="/contacts">{{ csrf() }}
+<div class="row"><div><label>First name *</label><input type="text" name="first_name" required></div><div><label>Last name *</label><input type="text" name="last_name" required></div>
+<div><label>Type</label><select name="contact_type">{% for t in contact_types %}<option>{{ t }}</option>{% endfor %}</select></div><div><label>Title</label><input type="text" name="title"></div></div>
+<div class="row"><div><label>Email</label><input type="text" name="email"></div><div><label>Phone</label><input type="text" name="phone"></div>
+<div><label>Organization</label><select name="organization_id"><option value="">—</option>{% for o in orgs %}<option value="{{ o.id }}">{{ o.name }} ({{ o.org_type }})</option>{% endfor %}</select></div><div><label>Role there</label><input type="text" name="organization_role" placeholder="owner, CFO, loan officer…"></div></div>
+<label>Notes</label><textarea name="notes"></textarea><p><button>Create contact</button></p></form></details>
+{% endblock %}

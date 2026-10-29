@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ c.first_name }} {{ c.last_name }}{% endblock %}
+{% block content %}
+<p><a href="/contacts">← Contacts</a></p>
+<h1>{{ c.first_name }} {{ c.last_name }} <span class="small muted">{{ c.contact_type.replace('_',' ') }}</span></h1>
+<div class="grid2"><div class="panel"><h2 style="margin-top:0">Details</h2>
+<form method="post" action="/contacts/{{ c.id }}/edit">{{ csrf() }}
+<div class="row"><div><label>First name</label><input type="text" name="first_name" value="{{ c.first_name }}" required></div><div><label>Last name</label><input type="text" name="last_name" value="{{ c.last_name }}" required></div></div>
+<div class="row"><div><label>Type</label><select name="contact_type">{% for t in contact_types %}<option {% if t == c.contact_type %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div><div><label>Title</label><input type="text" name="title" value="{{ c.title or '' }}"></div></div>
+<div class="row"><div><label>Email</label><input type="text" name="email" value="{{ c.email or '' }}"></div><div><label>Phone</label><input type="text" name="phone" value="{{ c.phone or '' }}"></div></div>
+<label>Notes</label><textarea name="notes">{{ c.notes or '' }}</textarea><p><button class="small">Save</button></p></form></div>
+<div class="panel"><h2 style="margin-top:0">Organizations</h2>
+<ul>{% for o in c.organizations %}<li><a href="/organizations/{{ o.id }}">{{ o.name }}</a> — {{ o.role }}{% if o.is_primary %} (primary){% endif %}</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul>
+<form method="post" action="/contacts/{{ c.id }}/link" class="actions">{{ csrf() }}<select name="organization_id" aria-label="Organization">{% for o in orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select>
+<input type="text" name="role" placeholder="role"><label class="check"><input type="checkbox" name="is_primary"> primary</label><button class="small">Link</button></form>
+<h2>Deals</h2><ul>{% for d in c.deals %}<li><a href="/deals/{{ d.id }}">{{ d.deal_number }}</a> {{ d.name }} — {{ d.role }} ({{ d.status }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul></div></div>
+{% endblock %}

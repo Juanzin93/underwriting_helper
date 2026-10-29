@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ o.name }}{% endblock %}
+{% block content %}
+<p><a href="/organizations">← Organizations</a></p>
+<h1>{{ o.name }} <span class="small muted">{{ o.org_type.replace('_',' ') }}</span></h1>
+<div class="grid2"><div class="panel"><h2 style="margin-top:0">Details</h2>
+<form method="post" action="/organizations/{{ o.id }}/edit">{{ csrf() }}
+<div class="row"><div style="flex:2 1 260px"><label>Name</label><input type="text" name="name" value="{{ o.name }}" required></div><div><label>Type</label><select name="org_type">{% for t in org_types %}<option {% if t == o.org_type %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div></div>
+<div class="row"><div><label>Phone</label><input type="text" name="phone" value="{{ o.phone or '' }}"></div><div><label>Email</label><input type="text" name="email" value="{{ o.email or '' }}"></div><div><label>Website</label><input type="text" name="website" value="{{ o.website or '' }}"></div></div>
+<div class="row"><div style="flex:2 1 260px"><label>Address</label><input type="text" name="address_line1" value="{{ o.address_line1 or '' }}"></div><div><label>City</label><input type="text" name="city" value="{{ o.city or '' }}"></div><div><label>State</label><input type="text" name="state" value="{{ o.state or '' }}"></div><div><label>ZIP</label><input type="text" name="postal_code" value="{{ o.postal_code or '' }}"></div></div>
+<label>Industry</label><input type="text" name="industry" value="{{ o.industry or '' }}"><input type="hidden" name="country" value="{{ o.country }}">
+<label>Notes</label><textarea name="notes">{{ o.notes or '' }}</textarea><p><button class="small">Save</button></p></form></div>
+<div class="panel"><h2 style="margin-top:0">People</h2><ul>{% for c in o.contacts %}<li><a href="/contacts/{{ c.id }}">{{ c.first_name }} {{ c.last_name }}</a> — {{ c.role }}{% if c.is_primary %} (primary){% endif %}</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul>
+<h2>Deals (as borrower)</h2><ul>{% for d in o.deals %}<li><a href="/deals/{{ d.id }}">{{ d.deal_number }}</a> {{ d.name }} ({{ d.status }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul></div></div>
+{% endblock %}

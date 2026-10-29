@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, TypeVar
 
 from fastapi import Request
 from pydantic import BaseModel, ValidationError
@@ -14,10 +15,21 @@ CHECKBOXES = {"is_guarantor", "to_be_refinanced", "mark_verified", "is_secured",
               "include_narrative"}
 
 
-async def form_dict(request: Request, prefix: str | None = None) -> dict[str, Any]:
+@asynccontextmanager
+async def read_form(request: Request) -> AsyncIterator[Any]:
+    """Parse the form and always close it, so uploaded temporary files are released promptly."""
     form = await request.form()
+    try:
+        yield form
+    finally:
+        await form.close()
+
+
+async def form_dict(request: Request, prefix: str | None = None) -> dict[str, Any]:
+    async with read_form(request) as form:
+        items = list(form.multi_items())
     data: dict[str, Any] = {}
-    for key, value in form.multi_items():
+    for key, value in items:
         if key == "csrf_token" or not isinstance(value, str):
             continue
         if prefix:

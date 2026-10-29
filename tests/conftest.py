@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ipaddress
 import shutil
+import socket
 from decimal import Decimal
 
 import pytest
@@ -14,6 +16,41 @@ from uwhelper.metrics.types import AnalysisInputs, InputValue, LoanTermsInput
 from uwhelper.repo import cases, facts
 
 HAS_TESSERACT = shutil.which("tesseract") is not None
+
+
+class ExternalNetworkBlocked(RuntimeError):
+    pass
+
+
+def _is_loopback(host) -> bool:
+    if host in ("localhost", "testserver"):
+        return True
+    try:
+        return ipaddress.ip_address(str(host).strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def offline_guard(monkeypatch):
+    """Every test runs with external network access blocked: only loopback connections are allowed."""
+    real_connect = socket.socket.connect
+    real_getaddrinfo = socket.getaddrinfo
+
+    def guarded_connect(self, address):
+        host = address[0] if isinstance(address, tuple) else address
+        if self.family in (socket.AF_INET, socket.AF_INET6) and not _is_loopback(host):
+            raise ExternalNetworkBlocked(f"test attempted an external connection to {host!r}")
+        return real_connect(self, address)
+
+    def guarded_getaddrinfo(host, *args, **kwargs):
+        if host is not None and not _is_loopback(host):
+            raise ExternalNetworkBlocked(f"test attempted DNS resolution of {host!r}")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+    yield
 
 # Known-answer income statement (annual).
 IS_VALUES = dict(revenue="2400000", cost_of_goods_sold="1440000", operating_expenses="600000", net_income="230000",

@@ -1,6 +1,6 @@
 # Milestone status, known limitations, unfinished features
 
-Latest test run: **222 passed, 2 skipped** (`pytest`, Python 3.13 on Linux, Tesseract 5.3.4). The 2 skipped tests are
+Phase 2 test run: **222 passed, 2 skipped** (`pytest`, Python 3.13 on Linux, Tesseract 5.3.4). The 2 skipped tests are
 the opt-in live-Ollama tests (no Ollama/GPU in the build environment). The PowerShell scripts were written for
 Windows but have **not been executed** on Windows by the author.
 
@@ -51,3 +51,25 @@ hardening. See git history and the test files `test_metrics.py`, `test_policy.py
 * Quarterly covenant spreading from interim statements; multi-year trend charts.
 * Policy editor UI (policies are YAML files).
 * Packaged Windows installer.
+
+## Platform Milestone 1 — foundation ✅
+
+Latest test run: **255 passed, 2 skipped** (`python -m pytest -q`, Python 3.13, Linux; also with
+`-W error::ResourceWarning`, and in a fresh venv installed from `requirements.lock`).
+
+| Item | Verified by |
+|---|---|
+| Dependency cleanup + lock | fresh-venv install from the lock, `pip check`, full suite |
+| Central settings (.env, DB/doc paths, integration flags) | `test_m1_foundation.py` settings tests |
+| SQLite strategy (FKs, busy timeout, transactions, shutdown checkpoint) | DB + lifespan tests; real server log |
+| Migration 0007 + upgrade | test upgrade from schema 6 with data; real phase-2 demo DB upgraded with all counts preserved and audit chain intact |
+| Organizations, contacts, deals, links | relationship, API CRUD, workflow tests |
+| Audit events | create/update/transition audit tests; chain verification |
+| Document storage | dedupe, size/type limits, deal attachment tests |
+| Health endpoint | ok/degraded/503 tests; offline server run (degraded, DB ok) |
+| Error format + validation | API error tests (404/422/403, request ID, no input echo) |
+| Navigation | CRM pages render; existing page tests unchanged |
+| Offline operation | network-blocking test guard; server run in a network namespace with no external route |
+
+Not verified here: the PowerShell scripts on real Windows, and the 2 live Ollama tests. See
+[ARCHITECTURE_ASSESSMENT.md](ARCHITECTURE_ASSESSMENT.md) for risks and [ROADMAP.md](ROADMAP.md) for Milestone 2.

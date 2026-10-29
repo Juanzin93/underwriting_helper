@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ deal.deal_number }}{% endblock %}
+{% block content %}
+<p><a href="/deals">← Deals</a></p>
+<h1 style="margin-bottom:0">{{ deal.deal_number }} · {{ deal.name }}</h1>
+<div class="stagebar"><span class="stage">Deal status: {{ deal.status.replace('_',' ') }}</span>
+<span class="small muted">{{ 'CRE' if deal.deal_type == 'cre' else 'Small business' }} · {{ deal.product_type.replace('_',' ') }} · requested {{ deal.requested_amount|money }} · since {{ deal.status_changed_at[:16].replace('T',' ') }}</span>
+{% if deal.loan_case_id %}<span class="small">Underwriting file: <a href="/cases/{{ deal.loan_case_id }}">{{ deal.case_number }}</a> (stage {{ deal.case_stage }})</span>{% endif %}</div>
+
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Change status</h2>
+{% if deal.allowed_transitions %}
+<form method="post" action="/deals/{{ deal.id }}/status" data-confirm="Change the deal status?">{{ csrf() }}
+<div class="row"><div><label>To</label><select name="to_status">{% for t in deal.allowed_transitions %}<option value="{{ t }}">{{ 'Resume' if t == 'RESUME' else t.replace('_',' ') }}</option>{% endfor %}</select></div>
+<div style="flex:2 1 260px"><label>Reason (≥ 10 characters) *</label><input type="text" name="reason" required minlength="10"></div></div>
+<div class="row"><div><label>Authorized by (required for {{ needs_auth|sort|join(', ') }})</label><input type="text" name="authorized_by"></div></div>
+<label class="check"><input type="checkbox" name="confirm"> This reflects a human decision recorded outside the software (needed for approval, funding, decline)</label>
+<p><button class="small">Change status</button></p></form>
+{% else %}<p class="muted">No further status changes (funded).</p>{% endif %}
+{% if not deal.loan_case_id %}<form method="post" action="/deals/{{ deal.id }}/underwriting-file" class="inline" data-confirm="Create an underwriting file from this deal?">{{ csrf() }}<button class="small secondary">Start underwriting file</button></form>
+<p class="small muted">Creates a linked underwriting case (borrower name, requested amount and deal documents are copied).</p>{% endif %}
+</div>
+<div class="panel"><h2 style="margin-top:0">Details</h2>
+<form method="post" action="/deals/{{ deal.id }}/edit">{{ csrf() }}
+<label>Name</label><input type="text" name="name" value="{{ deal.name }}" required>
+<div class="row"><div><label>Product</label><select name="product_type">{% for p in product_types[deal.deal_type] %}<option {% if p == deal.product_type %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></div>
+<div><label>Requested ($)</label><input type="text" name="requested_amount" value="{{ deal.requested_amount or '' }}"></div>
+<div><label>Target close</label><input type="date" name="target_close_date" value="{{ deal.target_close_date or '' }}"></div></div>
+<label>Borrower organization</label><select name="borrower_organization_id"><option value="">—</option>{% for o in orgs %}<option value="{{ o.id }}" {% if o.id == deal.borrower_organization_id %}selected{% endif %}>{{ o.name }}</option>{% endfor %}</select>
+<label>Primary contact</label><select name="primary_contact_id"><option value="">—</option>{% for c in contacts %}<option value="{{ c.id }}" {% if c.id == deal.primary_contact_id %}selected{% endif %}>{{ c.last_name }}, {{ c.first_name }}</option>{% endfor %}</select>
+<label>Loan purpose</label><input type="text" name="loan_purpose" value="{{ deal.loan_purpose or '' }}">
+<label>Collateral summary</label><input type="text" name="collateral_summary" value="{{ deal.collateral_summary or '' }}">
+<label>Notes</label><textarea name="notes">{{ deal.notes or '' }}</textarea>
+{% if deal.status != 'FUNDED' %}<p><button class="small">Save</button></p>{% endif %}</form></div></div>
+
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Contacts</h2>
+<table>{% for c in deal.contacts %}<tr><td><a href="/contacts/{{ c.id }}">{{ c.first_name }} {{ c.last_name }}</a></td><td>{{ c.role.replace('_',' ') }}</td><td class="small">{{ c.email or '' }} {{ c.phone or '' }}</td>
+<td><form method="post" action="/deals/{{ deal.id }}/remove-contact" class="inline">{{ csrf() }}<input type="hidden" name="contact_id" value="{{ c.id }}"><input type="hidden" name="role" value="{{ c.role }}"><button class="small secondary">Remove</button></form></td></tr>{% else %}<tr><td class="muted">None.</td></tr>{% endfor %}</table>
+<form method="post" action="/deals/{{ deal.id }}/contacts" class="actions">{{ csrf() }}
+<select name="contact_id" aria-label="Contact">{% for c in contacts %}<option value="{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</option>{% endfor %}</select>
+<select name="role" aria-label="Role">{% for r in contact_types %}<option>{{ r }}</option>{% endfor %}</select><button class="small">Add</button></form></div>
+<div class="panel"><h2 style="margin-top:0">Documents</h2>
+<table>{% for d in deal.documents %}<tr><td>{{ d.original_filename }}</td><td class="small">{{ doc_types.get(d.doc_type, d.doc_type) }}</td><td class="small">{{ d.page_count or '—' }} p. · {{ d.processing_status }}</td><td class="mono small">{{ d.sha256[:10] }}</td></tr>{% else %}<tr><td class="muted">None.</td></tr>{% endfor %}</table>
+<form method="post" action="/deals/{{ deal.id }}/documents?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data" class="actions">
+<input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.txt"><select name="doc_type" aria-label="Document type">{% for k, v in doc_types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="small">Upload</button></form>
+<p class="small muted">Stored locally under a hash-based internal name (max {{ settings.max_upload_mb }} MB; PDF, image or text). Identical files are stored once.</p></div></div>
+
+<h2>Status history</h2>
+<table><tr><th>When (UTC)</th><th>From</th><th>To</th><th>Reason</th><th>Authorized by</th></tr>
+{% for h in deal.history|reverse %}<tr><td class="small">{{ h.occurred_at }}</td><td>{{ h.from_status or '—' }}</td><td><b>{{ h.to_status }}</b></td><td class="small">{{ h.reason }}</td><td>{{ h.authorized_by or '' }}</td></tr>{% endfor %}</table>
+{% endblock %}

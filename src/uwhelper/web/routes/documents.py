@@ -19,7 +19,7 @@ from uwhelper.modules import get_module
 from uwhelper.repo import facts as facts_repo
 from uwhelper.repo.cases import ValidationFailure, get_case
 from uwhelper.web.app import get_db, redirect, render
-from uwhelper.web.forms import form_dict
+from uwhelper.web.forms import form_dict, read_form
 from uwhelper.web.routes.cases import case_context
 
 router = APIRouter()
@@ -38,31 +38,31 @@ async def documents_page(request: Request, case_id: str):
 
 @router.post("/cases/{case_id}/documents")
 async def upload(request: Request, case_id: str):
-    form = await request.form()
-    files = [f for f in form.getlist("files") if isinstance(f, UploadFile) and f.filename]
-    if not files:
-        raise ValidationFailure("Choose at least one file to upload.")
-    doc_type = str(form.get("doc_type") or "other")
-    period_label = (str(form.get("period_label") or "").strip() or None)
-    password = str(form.get("password") or "") or None  # used once, never stored
-    settings: Settings = request.app.state.settings
-    messages = []
-    with get_db(request).session() as conn:
-        get_case(conn, case_id)
-        for f in files[:20]:
-            try:
-                res = service.import_document(conn, settings, case_id, f.file, f.filename, doc_type, period_label,
-                                              password=password)
-            except UploadRejected as exc:
-                messages.append(f"{f.filename}: rejected — {exc}")
-                continue
-            if res.duplicate:
-                messages.append(f"{f.filename}: identical file already stored (SHA-256 match) — "
-                                + ("already on this case." if res.already_linked else "linked without reprocessing."))
-            else:
-                messages.append(f"{f.filename}: imported ({res.status}).")
-    level = "warn" if any("rejected" in m for m in messages) else "info"
-    return redirect(f"/cases/{case_id}/documents", " ".join(messages), level)
+    async with read_form(request) as form:
+        files = [f for f in form.getlist("files") if isinstance(f, UploadFile) and f.filename]
+        if not files:
+            raise ValidationFailure("Choose at least one file to upload.")
+        doc_type = str(form.get("doc_type") or "other")
+        period_label = (str(form.get("period_label") or "").strip() or None)
+        password = str(form.get("password") or "") or None  # used once, never stored
+        settings: Settings = request.app.state.settings
+        messages = []
+        with get_db(request).session() as conn:
+            get_case(conn, case_id)
+            for f in files[:20]:
+                try:
+                    res = service.import_document(conn, settings, case_id, f.file, f.filename, doc_type, period_label,
+                                                  password=password)
+                except UploadRejected as exc:
+                    messages.append(f"{f.filename}: rejected — {exc}")
+                    continue
+                if res.duplicate:
+                    messages.append(f"{f.filename}: identical file already stored (SHA-256 match) — "
+                                    + ("already on this case." if res.already_linked else "linked without reprocessing."))
+                else:
+                    messages.append(f"{f.filename}: imported ({res.status}).")
+        level = "warn" if any("rejected" in m for m in messages) else "info"
+        return redirect(f"/cases/{case_id}/documents", " ".join(messages), level)
 
 
 @router.get("/cases/{case_id}/documents/{document_id}")

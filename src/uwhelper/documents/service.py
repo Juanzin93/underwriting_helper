@@ -63,6 +63,40 @@ def import_document(conn: sqlite3.Connection, settings: Settings, case_id: str, 
     return ImportResult(doc_id, False, False, status)
 
 
+def ingest_file(conn: sqlite3.Connection, settings: Settings, stream: BinaryIO, filename: str | None,
+                password: str | None = None) -> dict[str, Any]:
+    """Validate, hash and store a file (or reuse an identical stored file); extract its text locally.
+
+    Returns {"document_id", "duplicate", "status"}. The file is stored under a generated, hash-based
+    internal name in the documents directory; the user's file name is kept only as display metadata.
+    """
+    staged = stage_upload(stream, filename, settings.documents_dir / ".incoming", settings.max_upload_bytes)
+    try:
+        existing = conn.execute("SELECT * FROM documents WHERE sha256=?", (staged.sha256,)).fetchone()
+        if existing:
+            return {"document_id": existing["id"], "duplicate": True, "status": existing["processing_status"]}
+        name = stored_name(staged.sha256, staged.ext)
+        dest = settings.documents_dir / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(staged.path, dest)
+        doc_id, now = new_id(), utcnow()
+        try:
+            with Database.transaction(conn):
+                conn.execute(
+                    """INSERT INTO documents(id, sha256, original_filename, stored_name, file_ext, size_bytes,
+                           processing_status, imported_at) VALUES (?,?,?,?,?,?, 'pending', ?)""",
+                    (doc_id, staged.sha256, staged.display_name, name, staged.ext, staged.size, now))
+                audit.record(conn, "document_imported", "document", doc_id, None,
+                             {"sha256": staged.sha256, "size": staged.size, "ext": staged.ext})
+        except Exception:
+            dest.unlink(missing_ok=True)
+            raise
+    finally:
+        staged.path.unlink(missing_ok=True)
+    status = process_document(conn, settings, doc_id, password=password)
+    return {"document_id": doc_id, "duplicate": False, "status": status}
+
+
 def _store_new(conn: sqlite3.Connection, settings: Settings, case_id: str, staged: StagedFile, doc_type: str,
                period_label: str | None, document_date: str | None) -> str:
     name = stored_name(staged.sha256, staged.ext)
@@ -188,6 +222,7 @@ def remove_document(conn: sqlite3.Connection, settings: Settings, case_id: str, 
         raise ValidationFailure(f"{active} active fact(s) cite this document. Reject them before removing it.")
     others = conn.execute("SELECT COUNT(*) AS n FROM case_documents WHERE document_id=? AND case_id!=?",
                           (document_id, case_id)).fetchone()["n"]
+    others += conn.execute("SELECT COUNT(*) AS n FROM deal_documents WHERE document_id=?", (document_id,)).fetchone()["n"]
     with Database.transaction(conn):
         conn.execute("DELETE FROM case_documents WHERE case_id=? AND document_id=?", (case_id, document_id))
         if not others:

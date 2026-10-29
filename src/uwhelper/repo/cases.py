@@ -337,7 +337,8 @@ def purge_case(conn: sqlite3.Connection, case_id: str, documents_dir: Path, repo
                                 "retention policy allows it.")
     doc_rows = conn.execute(
         """SELECT d.id, d.stored_name FROM documents d JOIN case_documents cd ON cd.document_id=d.id
-           WHERE cd.case_id=? AND NOT EXISTS (SELECT 1 FROM case_documents o WHERE o.document_id=d.id AND o.case_id!=?)""",
+           WHERE cd.case_id=? AND NOT EXISTS (SELECT 1 FROM case_documents o WHERE o.document_id=d.id AND o.case_id!=?)
+             AND NOT EXISTS (SELECT 1 FROM deal_documents dd WHERE dd.document_id=d.id)""",
         (case_id, case_id),
     ).fetchall()
     report_files = [r["file_name"] for r in conn.execute("SELECT file_name FROM reports WHERE case_id=?", (case_id,))]

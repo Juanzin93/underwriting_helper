@@ -23,14 +23,22 @@ def new_id() -> str:
 
 
 class Database:
-    def __init__(self, path: Path | str):
+    """Connection factory. One short-lived connection per request/job (``session()``); never shared across threads.
+
+    Every connection: foreign keys ON, WAL journal, busy timeout, autocommit mode with explicit
+    ``transaction()`` blocks (BEGIN IMMEDIATE ... COMMIT / ROLLBACK).
+    """
+
+    def __init__(self, path: Path | str, busy_timeout_ms: int = 30000):
         self.path = str(path)
+        self.busy_timeout_ms = int(busy_timeout_ms)
 
     def connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.path, timeout=30, isolation_level=None, check_same_thread=False)
+        conn = sqlite3.connect(self.path, timeout=self.busy_timeout_ms / 1000, isolation_level=None,
+                               check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA busy_timeout = 30000")
+        conn.execute(f"PRAGMA busy_timeout = {self.busy_timeout_ms:d}")
         if self.path != ":memory:":
             conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
@@ -43,6 +51,22 @@ class Database:
             yield conn
         finally:
             conn.close()
+
+    def check(self) -> dict[str, Any]:
+        """Lightweight availability check used by the health endpoint."""
+        with self.session() as conn:
+            conn.execute("SELECT 1").fetchone()
+            fk = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+            ver = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+        return {"foreign_keys": bool(fk), "schema_version": ver}
+
+    def shutdown(self) -> None:
+        """Clean shutdown: fold the WAL into the main file and refresh query-planner statistics."""
+        if self.path == ":memory:":
+            return
+        with self.session() as conn:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("PRAGMA optimize")
 
     @staticmethod
     @contextmanager

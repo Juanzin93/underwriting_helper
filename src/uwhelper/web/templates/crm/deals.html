@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Deals{% endblock %}
+{% block content %}
+<h1>Deals pipeline</h1>
+<div class="pipeline" aria-label="Deals by status">{% for p in pipeline %}<span class="{{ 'done' if p.count else '' }}"><a href="?status={{ p.status }}">{{ p.status.replace('_',' ').title() }}</a>: <b>{{ p.count }}</b>{% if p.count %} · {{ p.requested_total|money }}{% endif %}</span>{% endfor %}</div>
+<form method="get" class="actions panel"><input type="text" name="q" value="{{ q }}" placeholder="Search name, number or borrower" aria-label="Search">
+<select name="status" aria-label="Status"><option value="">All statuses</option>{% for s in statuses %}<option {% if status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select><button class="small secondary">Filter</button></form>
+<table><tr><th>Deal</th><th>Type / product</th><th>Borrower</th><th class="num">Requested</th><th>Status</th><th>Underwriting file</th><th>Updated</th></tr>
+{% for d in deals %}<tr><td><a href="/deals/{{ d.id }}"><b>{{ d.deal_number }}</b></a><br><span class="small">{{ d.name }}</span></td>
+<td class="small">{{ 'CRE' if d.deal_type == 'cre' else 'Small business' }}<br>{{ d.product_type.replace('_',' ') }}</td><td>{{ d.borrower_name or '—' }}</td>
+<td class="num">{{ d.requested_amount|money }}</td><td><span class="stage">{{ d.status.replace('_',' ') }}</span></td>
+<td class="small">{% if d.loan_case_id %}<a href="/cases/{{ d.loan_case_id }}">{{ d.case_number }}</a> ({{ d.case_stage }}){% else %}—{% endif %}</td><td class="small">{{ d.updated_at[:10] }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No deals yet.</td></tr>{% endfor %}</table>
+
+<details class="panel" {% if not deals %}open{% endif %}><summary>New deal</summary>
+<form method="post" action="/deals">{{ csrf() }}
+<div class="row"><div style="flex:2 1 260px"><label>Deal name *</label><input type="text" name="name" required></div>
+<div><label>Deal type *</label><select name="deal_type"><option value="small_business">Small business</option><option value="cre">Commercial real estate</option></select></div>
+<div><label>Product *</label><select name="product_type">{% for t, items in product_types.items() %}<optgroup label="{{ 'CRE' if t == 'cre' else 'Small business' }}">{% for p in items %}<option value="{{ p }}">{{ p.replace('_',' ') }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
+<div><label>Requested amount ($)</label><input type="text" name="requested_amount"></div></div>
+<div class="row"><div><label>Borrower organization</label><select name="borrower_organization_id"><option value="">—</option>{% for o in orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></div>
+<div><label>Primary contact</label><select name="primary_contact_id"><option value="">—</option>{% for c in contacts %}<option value="{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</option>{% endfor %}</select></div>
+<div><label>Referral source</label><select name="referral_source_contact_id"><option value="">—</option>{% for c in contacts %}<option value="{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</option>{% endfor %}</select></div>
+<div><label>Target close</label><input type="date" name="target_close_date"></div></div>
+<label>Loan purpose</label><input type="text" name="loan_purpose"><label>Collateral summary</label><input type="text" name="collateral_summary">
+<p class="small muted">The product must match the deal type. Add borrower organizations and contacts first if they are not listed.</p>
+<p><button>Create deal</button></p></form></details>
+{% endblock %}

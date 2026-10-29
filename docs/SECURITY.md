@@ -19,7 +19,12 @@ the data directory and talk to `127.0.0.1`.
 | Audit evidence | Hash-chained audit log, verified on the System and Audit pages and by `uwhelper verify-audit` |
 | Lifecycle safety | Gate checks; hard blockers cannot be overridden; human confirmation for decisions, waivers and funding; no money movement or document execution |
 | Errors | Generic error pages; logs record exception types, not document text or values |
-| Git | Data dir outside repo by default; `.gitignore` excludes PDFs/images/DBs/backups; pre-commit hook blocks them |
+| Telemetry in dependencies | FastAPI's built-in OpenTelemetry support disabled (`telemetry` off, `OTEL_SDK_DISABLED=true`); no exporter installed; test asserts it |
+| Integrations | Registry with two switches (`UWH_EXTERNAL_INTEGRATIONS_ALLOWED` + per-name `UWH_ENABLED_INTEGRATIONS`), share-confirmation helper; none implemented |
+| API | JSON API needs `X-CSRF-Token`; no CORS headers; errors carry a request ID but never input values |
+| Static files | Settings refuse a data/DB/document folder inside `web/static` |
+| Tests | Autouse guard blocks non-loopback sockets and DNS during tests |
+| Git | `.env` ignored; data dir outside repo by default; `.gitignore` excludes PDFs/images/DBs/backups; pre-commit hook blocks them |
 
 ## Encryption at rest — limitation
 The app does **not** encrypt the SQLite database or documents itself (SQLCipher needs non-standard builds on

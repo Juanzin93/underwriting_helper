@@ -12,7 +12,8 @@
 param(
     [string]$Model = "qwen3:8b",
     [switch]$PullModel,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$Latest
 )
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
@@ -30,8 +31,10 @@ Write-Host "Python $ver OK"
 if (-not (Test-Path ".venv")) { & $PythonExe @PyArgs -m venv .venv }
 $VenvPy = Join-Path $Root ".venv\Scripts\python.exe"
 & $VenvPy -m pip install --upgrade pip
-& $VenvPy -m pip install -r requirements-dev.txt
+# Exact, tested versions (requirements.lock). Use -Latest to resolve fresh versions within the allowed ranges.
+if ($Latest) { & $VenvPy -m pip install -r requirements-dev.txt } else { & $VenvPy -m pip install -r requirements.lock }
 & $VenvPy -m pip install -e . --no-deps
+& $VenvPy -m pip check
 Write-Host "Dependencies installed" -ForegroundColor Green
 
 # 3. Git hook that blocks committing borrower documents / databases

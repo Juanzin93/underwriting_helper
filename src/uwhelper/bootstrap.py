@@ -14,7 +14,7 @@ log = logging.getLogger("uwhelper")
 
 def initialise(settings: Settings) -> tuple[Database, LoadReport]:
     settings.ensure_dirs()
-    db = Database(settings.db_path)
+    db = Database(settings.db_path, settings.db_busy_timeout_ms)
     with db.session() as conn:
         applied = apply_migrations(conn)
         if applied:

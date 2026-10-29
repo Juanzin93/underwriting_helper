@@ -18,21 +18,21 @@ def test_modified_migration_detected(tmp_path):
     d = tmp_path / "m"
     d.mkdir()
     (d / "0001_a.sql").write_text("CREATE TABLE t (x INTEGER);", encoding="utf-8")
-    c = Database(":memory:").connect()
-    assert apply_migrations(c, d) == [1]
-    (d / "0001_a.sql").write_text("CREATE TABLE t (x INTEGER, y INTEGER);", encoding="utf-8")
-    with pytest.raises(MigrationError, match="modified"):
-        apply_migrations(c, d)
+    with Database(":memory:").session() as c:
+        assert apply_migrations(c, d) == [1]
+        (d / "0001_a.sql").write_text("CREATE TABLE t (x INTEGER, y INTEGER);", encoding="utf-8")
+        with pytest.raises(MigrationError, match="modified"):
+            apply_migrations(c, d)
 
 
 def test_failed_migration_rolls_back(tmp_path):
     d = tmp_path / "m"
     d.mkdir()
     (d / "0001_a.sql").write_text("CREATE TABLE t (x INTEGER);\nINSERT INTO nope VALUES (1);", encoding="utf-8")
-    c = Database(":memory:").connect()
-    with pytest.raises(MigrationError):
-        apply_migrations(c, d)
-    assert c.execute("SELECT name FROM sqlite_master WHERE name='t'").fetchone() is None
+    with Database(":memory:").session() as c:
+        with pytest.raises(MigrationError):
+            apply_migrations(c, d)
+        assert c.execute("SELECT name FROM sqlite_master WHERE name='t'").fetchone() is None
 
 
 def test_split_sql_handles_triggers():

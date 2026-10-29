@@ -14,7 +14,7 @@ from uwhelper.repo.cases import ValidationFailure
 from uwhelper.servicing import ledger as LG
 from uwhelper.servicing import monitoring as MO
 from uwhelper.web.app import get_db, redirect, render
-from uwhelper.web.forms import checkbox, form_dict, validate
+from uwhelper.web.forms import checkbox, form_dict, read_form, validate
 from uwhelper.web.routes.cases import case_context
 from uwhelper.workflow.currency import latest_base_run
 
@@ -76,17 +76,17 @@ async def open_account(request: Request, case_id: str):
 @router.post("/cases/{case_id}/servicing/{action}")
 async def servicing_action(request: Request, case_id: str, action: str):
     if action == "import":
-        form = await request.form()
-        f = form.get("file")
-        if not isinstance(f, UploadFile):
-            raise ValidationFailure("Choose a CSV file.")
-        data_bytes = await f.read(2_000_001)
-        if len(data_bytes) > 2_000_000:
-            raise ValidationFailure("CSV larger than 2 MB.")
-        with get_db(request).session() as conn:
-            r = LG.import_payments_csv(conn, _acct(conn, case_id)["id"], data_bytes)
-        return redirect(f"/cases/{case_id}/servicing", f"Imported {r['imported']} payment(s); "
-                        f"{r['duplicates']} duplicate(s) skipped (batch {r['batch']}).")
+        async with read_form(request) as form:
+            f = form.get("file")
+            if not isinstance(f, UploadFile):
+                raise ValidationFailure("Choose a CSV file.")
+            data_bytes = await f.read(2_000_001)
+            if len(data_bytes) > 2_000_000:
+                raise ValidationFailure("CSV larger than 2 MB.")
+            with get_db(request).session() as conn:
+                r = LG.import_payments_csv(conn, _acct(conn, case_id)["id"], data_bytes)
+            return redirect(f"/cases/{case_id}/servicing", f"Imported {r['imported']} payment(s); "
+                            f"{r['duplicates']} duplicate(s) skipped (batch {r['batch']}).")
     data = await form_dict(request)
     if action == "covenant-active":
         checkbox(data, "active")
