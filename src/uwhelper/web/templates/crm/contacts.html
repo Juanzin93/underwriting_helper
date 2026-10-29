@@ -1,12 +1,17 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form, activity_form, activity_list, pager %}
 {% block title %}Contacts{% endblock %}
 {% block content %}
 <h1>Contacts</h1>
-<form method="get" class="actions panel"><input type="text" name="q" value="{{ q }}" placeholder="Search name or email" aria-label="Search"><button class="small secondary">Search</button></form>
+<form method="get" class="actions panel"><input type="text" name="q" value="{{ q }}" placeholder="Search name or email" aria-label="Search">
+<select name="contact_type" aria-label="Type"><option value="">All types</option>{% for t in contact_types %}<option {% if contact_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+<label class="check"><input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}> include archived</label><button class="small secondary">Filter</button>
+<a class="btn secondary small" href="/import?kind=contacts">Import CSV…</a></form>
 <table><tr><th>Name</th><th>Type</th><th>Organization</th><th>Email</th><th>Phone</th></tr>
-{% for c in contacts %}<tr><td><a href="/contacts/{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</a>{% if c.title %}<br><span class="small">{{ c.title }}</span>{% endif %}</td><td>{{ c.contact_type.replace('_',' ') }}</td><td>{{ c.organization_name or '—' }}</td><td class="small">{{ c.email or '' }}</td><td class="small">{{ c.phone or '' }}</td></tr>
-{% else %}<tr><td colspan="5" class="muted">No contacts yet.</td></tr>{% endfor %}</table>
+{% for c in contacts %}<tr><td><a href="/contacts/{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</a>{% if c.archived %} <span class="badge superseded">archived</span>{% endif %}{% if c.title %}<br><span class="small">{{ c.title }}</span>{% endif %}</td><td>{{ c.contact_type.replace('_',' ') }}</td><td>{{ c.organization_name or '—' }}</td><td class="small">{{ c.email or '' }}</td><td class="small">{{ c.phone or '' }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No contacts match.</td></tr>{% endfor %}</table>
+{{ pager(contacts, limit, offset, base_query) }}
 <details class="panel" {% if not contacts %}open{% endif %}><summary>New contact</summary>
 <form method="post" action="/contacts">{{ csrf() }}
 <div class="row"><div><label>First name *</label><input type="text" name="first_name" required></div><div><label>Last name *</label><input type="text" name="last_name" required></div>

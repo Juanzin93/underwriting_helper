@@ -1,0 +1,44 @@
+# Needed-items checklists for deals, by deal type and product. ILLUSTRATIVE DEFAULTS — adjust to your practice.
+# Versioned: bump `version` when items change. Requests already generated keep the version they were created with.
+# doc_type must be a document type of the commercial module (see Documents page).
+key: deal_documents
+version: "2026.1"
+common:
+  small_business:
+    - {key: loan_request, label: "Loan request / use of proceeds", doc_type: loan_request, required: true}
+    - {key: business_tax_returns, label: "Business tax returns (last 3 years)", doc_type: business_tax_return, required: true}
+    - {key: interim_financials, label: "Year-to-date interim financial statements", doc_type: interim_financials, required: true}
+    - {key: debt_schedule, label: "Business debt schedule", doc_type: debt_schedule, required: true}
+    - {key: bank_statements, label: "Business bank statements (last 6 months)", doc_type: bank_statement, required: false}
+    - {key: personal_financial_statement, label: "Personal financial statement (each 20%+ owner)", doc_type: personal_financial_statement, required: true}
+    - {key: personal_tax_returns, label: "Personal tax returns (each guarantor, last 2 years)", doc_type: personal_tax_return, required: true}
+  cre:
+    - {key: loan_request, label: "Loan request / term sheet", doc_type: loan_request, required: true}
+    - {key: rent_roll, label: "Current rent roll", doc_type: rent_roll, required: true}
+    - {key: operating_statements, label: "Property operating statements (T-12 and 2 prior years)", doc_type: operating_statement, required: true}
+    - {key: personal_financial_statement, label: "Sponsor personal financial statement", doc_type: personal_financial_statement, required: true}
+    - {key: personal_tax_returns, label: "Sponsor personal tax returns (last 2 years)", doc_type: personal_tax_return, required: false}
+products:
+  equipment:
+    - {key: equipment_quote, label: "Equipment invoice / quote", doc_type: equipment_quote, required: true}
+  business_acquisition:
+    - {key: purchase_agreement, label: "Purchase agreement / LOI", doc_type: purchase_agreement, required: true}
+    - {key: projections, label: "Post-acquisition projections", doc_type: projections, required: true}
+  line_of_credit:
+    - {key: ar_aging, label: "Accounts receivable aging", doc_type: ar_aging, required: true}
+    - {key: ap_aging, label: "Accounts payable aging", doc_type: ap_aging, required: false}
+  working_capital:
+    - {key: ar_aging, label: "Accounts receivable aging", doc_type: ar_aging, required: false}
+  cre_purchase:
+    - {key: purchase_agreement, label: "Purchase and sale agreement", doc_type: purchase_agreement, required: true}
+    - {key: appraisal, label: "Appraisal (if available)", doc_type: appraisal, required: false}
+  cre_refinance:
+    - {key: existing_loan, label: "Existing mortgage note / payoff", doc_type: loan_agreement, required: true}
+    - {key: appraisal, label: "Appraisal (if available)", doc_type: appraisal, required: false}
+  cre_cash_out:
+    - {key: existing_loan, label: "Existing mortgage note / payoff", doc_type: loan_agreement, required: true}
+    - {key: appraisal, label: "Appraisal (if available)", doc_type: appraisal, required: false}
+  construction:
+    - {key: projections, label: "Construction budget and pro forma", doc_type: projections, required: true}
+  owner_occupied_cre:
+    - {key: purchase_agreement, label: "Purchase agreement (if a purchase)", doc_type: purchase_agreement, required: false}

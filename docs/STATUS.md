@@ -73,3 +73,23 @@ Latest test run: **255 passed, 2 skipped** (`python -m pytest -q`, Python 3.13, 
 
 Not verified here: the PowerShell scripts on real Windows, and the 2 live Ollama tests. See
 [ARCHITECTURE_ASSESSMENT.md](ARCHITECTURE_ASSESSMENT.md) for risks and [ROADMAP.md](ROADMAP.md) for Milestone 2.
+
+## Platform Milestone 2 — CRM, borrower, deal, document and task workflows ✅
+
+Latest test run: **285 passed, 2 skipped** (`python -m pytest -q`; also with `-W error::ResourceWarning`). New tests:
+`tests/unit/test_m2_crm_workflows.py` (30). Details per item: [ROADMAP.md](ROADMAP.md#milestone-2--shared-crm-borrower-deal-document-and-task-workflows-).
+
+Also verified by hand:
+* A database created by the Milestone 1 release (lifecycle demo + a deal with history) upgraded to schema 8: all row
+  counts preserved, every borrower linked to an organization, integrity ok, no foreign-key violations, audit chain intact.
+* The new pages (deal checklist/tasks/notes/timeline, tasks, file page links, import) in Chromium at desktop and phone
+  width (no horizontal scrolling at 390 px).
+
+Known limitations added in M2:
+* Sync between a deal and its file covers funding, servicing, decline, withdrawal and cancellation only; other stages
+  are independent by design (the deal page shows notices when they diverge).
+* The actor is the Windows account name (or `UWH_ACTOR_NAME`): attribution, not authentication.
+* The document checklist is an illustrative YAML file; edit it to match your practice.
+* CSV import is limited to 1 MB / 5,000 rows per file and never updates existing records.
+
+Still not verified here: the PowerShell scripts on real Windows and the 2 live Ollama tests.

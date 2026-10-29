@@ -72,6 +72,14 @@ async def case_overview(request: Request, case_id: str):
         ctx.update(parties=repo.list_parties(conn, case_id), debts=repo.list_debts(conn, case_id),
                    collateral=repo.list_collateral(conn, case_id), terms_history=repo.terms_history(conn, case_id),
                    events=audit.list_events(conn, case_id, limit=15))
+        from uwhelper.crm import pipeline
+        from uwhelper.crm import service as crm
+
+        ctx["deal"] = pipeline.deal_for_case(conn, case_id)
+        org_id = ctx["case"]["borrower"].get("organization_id")
+        ctx["borrower_org"] = crm.get_organization(conn, org_id) if org_id else None
+        ctx["all_contacts"] = crm.list_contacts(conn, limit=200)
+        ctx["party_contacts"] = {c["id"]: c for c in ctx["all_contacts"]}
         from uwhelper.analysis.resolver import find_contradictions, missing_checklist
 
         ctx["contradiction_count"] = len(find_contradictions(conn, case_id))
@@ -125,6 +133,17 @@ async def add_party(request: Request, case_id: str):
         repo.get_case(conn, case_id)
         repo.add_party(conn, case_id, party)
     return redirect(f"/cases/{case_id}", "Owner/guarantor added.")
+
+
+@router.post("/cases/{case_id}/parties/{party_id}/contact")
+async def link_party_contact(request: Request, case_id: str, party_id: str):
+    from uwhelper.crm import service as crm
+
+    data = await form_dict(request)
+    with get_db(request).session() as conn:
+        create = data.get("contact_id") == "__new__"
+        crm.link_party_contact(conn, case_id, party_id, None if create else data.get("contact_id") or None, create=create)
+    return redirect(f"/cases/{case_id}", "Owner/guarantor linked to a contact.")
 
 
 @router.post("/cases/{case_id}/parties/{party_id}/delete")

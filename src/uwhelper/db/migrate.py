@@ -9,6 +9,10 @@ Strategy
   edit an applied migration, add a new one instead.
 * There are no down-migrations; restore from a backup to go back
   (see docs/OPERATIONS.md).
+* A migration whose first line is ``-- uwh:foreign_keys=off`` runs with foreign-key
+  enforcement off (SQLite's documented table-rebuild procedure: dropping a parent table
+  with enforcement on would fire ON DELETE CASCADE). ``PRAGMA foreign_key_check`` must
+  come back empty before it commits; enforcement is switched back on afterwards.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from .connection import utcnow
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 _NAME_RE = re.compile(r"^(\d{4})_([a-z0-9_]+)\.sql$")
+FK_OFF_MARKER = "-- uwh:foreign_keys=off"
 
 
 class MigrationError(RuntimeError):
@@ -34,6 +39,10 @@ class Migration:
     version: int
     name: str
     sql: str
+
+    @property
+    def foreign_keys_off(self) -> bool:
+        return self.sql.lstrip().splitlines()[0].strip() == FK_OFF_MARKER if self.sql.strip() else False
 
     @property
     def checksum(self) -> str:
@@ -74,10 +83,18 @@ def apply_migrations(conn: sqlite3.Connection, directory: Path = MIGRATIONS_DIR)
                     "Create a new migration instead of editing an applied one."
                 )
             continue
+        fk_was_on = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+        if mig.foreign_keys_off:
+            conn.execute("PRAGMA foreign_keys = OFF")  # only effective outside a transaction
         try:
             conn.execute("BEGIN IMMEDIATE")
             for statement in split_sql(mig.sql):
                 conn.execute(statement)
+            if mig.foreign_keys_off:
+                bad = conn.execute("PRAGMA foreign_key_check").fetchall()
+                if bad:
+                    tables = sorted({r[0] for r in bad})
+                    raise MigrationError(f"foreign key violations after rebuild in: {', '.join(tables)}")
             conn.execute(
                 "INSERT INTO schema_migrations(version, name, checksum, applied_at) VALUES (?,?,?,?)",
                 (mig.version, mig.name, mig.checksum, utcnow()),
@@ -87,6 +104,9 @@ def apply_migrations(conn: sqlite3.Connection, directory: Path = MIGRATIONS_DIR)
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
             raise MigrationError(f"Migration {mig.version:04d}_{mig.name} failed: {exc}") from exc
+        finally:
+            if mig.foreign_keys_off and fk_was_on:
+                conn.execute("PRAGMA foreign_keys = ON")
         newly.append(mig.version)
     return newly
 

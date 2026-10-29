@@ -16,6 +16,7 @@ h1 { font-size: 22px; margin: 4px 0 10px; } h2 { font-size: 18px; margin: 22px 0
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; margin-bottom: 14px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 @media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { table { display: block; overflow-x: auto; } .panel, .grid2 > *, .grid3 > * { min-width: 0; } input[type=file] { max-width: 100%; } }
 table { border-collapse: collapse; width: 100%; background: var(--panel); }
 th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
 th { background: #eef1f5; font-size: 12.5px; text-transform: none; color: #333; position: sticky; top: 0; }

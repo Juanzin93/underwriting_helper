@@ -65,6 +65,7 @@ Only `UWH_*` keys are read from `.env`; `.env` is ignored by git.
 | `UWH_MAX_UPLOAD_MB` / `UWH_MAX_PAGES` | `50` / `300` | Upload limits |
 | `UWH_DB_BUSY_TIMEOUT_MS` | `30000` | SQLite lock wait |
 | `UWH_LOG_LEVEL` | `INFO` | `DEBUG` … `CRITICAL` |
+| `UWH_ACTOR_NAME` | Windows account name | "Recorded by" on audit events, tasks, notes (attribution, not a login) |
 | `UWH_EXTERNAL_INTEGRATIONS_ALLOWED` / `UWH_ENABLED_INTEGRATIONS` | `false` / empty | Both needed to enable a named integration; none exist yet |
 
 Keep the data folder off OneDrive/Dropbox and outside the repository. The app refuses to start if the data,
@@ -126,7 +127,7 @@ migrations the next time the app starts.
 git pull
 .\.venv\Scripts\python -m pip install -r requirements.lock
 .\.venv\Scripts\python -m pip install -e . --no-deps
-.\.venv\Scripts\python -m uwhelper init        # applies new migrations (e.g. 0007 CRM foundation); existing data kept
+.\.venv\Scripts\python -m uwhelper init        # applies new migrations (0007 CRM, 0008 workflows); existing data kept
 ```
 
 Migrations are forward-only and checksum-verified; the app refuses to start if an applied migration file was edited.

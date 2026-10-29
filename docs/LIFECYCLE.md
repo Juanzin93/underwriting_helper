@@ -68,3 +68,30 @@ The closing workspace records the closing date, disbursement instructions (store
 that they changed), a user-reported disbursement status, outstanding issues and the closing checklist. Funding is
 recorded only after the user types `I CONFIRM THIS LOAN WAS FUNDED`; it cannot be dated in the future, cannot exceed the
 executed principal, and is immutable. The application never executes agreements or moves money.
+
+## Deals and underwriting files: one pipeline truth (Milestone 2)
+
+A **deal** (Deals menu) owns the brokerage pipeline; its linked **underwriting file** owns the internal credit
+lifecycle above. They stay consistent through recorded rules in `crm/pipeline.py` — every automatic change writes
+history on both sides and an audit event (`deal_status_synced` / `workflow_transition`).
+
+Deal statuses: INTAKE → UNDERWRITING → (CREDIT_REVIEW) → STRUCTURING → LENDER_SUBMISSION → APPROVED* → DUE_DILIGENCE
+→ CLOSING → FUNDED* → SERVICING, plus ON_HOLD, WITHDRAWN, CANCELLED, DECLINED* (* named human + confirmation).
+CREDIT_REVIEW is optional for a deal (a lender may do its own review).
+
+| When the file … | the deal … |
+|---|---|
+| is funded (funding confirmation) | becomes FUNDED, authorized by the funding's "confirmed by" |
+| opens servicing | becomes SERVICING |
+| is declined (after a DECLINE credit decision) | becomes DECLINED, authorized by the decision's "decided by" |
+| is withdrawn / cancelled | becomes WITHDRAWN / CANCELLED |
+
+| When the deal … | the file … |
+|---|---|
+| is withdrawn / cancelled | is withdrawn / cancelled if not yet funded |
+| is declined by lenders | is **not** changed; the deal page shows a notice |
+| is marked funded by an outside lender | is **not** changed; the deal page explains that servicing here needs a confirmed funding on the file |
+
+Guards: a file cannot be funded while its deal is declined/withdrawn/cancelled; a file cannot be declined/withdrawn/
+cancelled while its deal is funded or servicing; a deal cannot be funded while its file is declined/withdrawn/cancelled.
+A closed deal is never reopened automatically. An existing file can be linked to a deal from the deal page.

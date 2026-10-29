@@ -12,19 +12,29 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from uwhelper import __version__
+from uwhelper.crm import activities as acts
+from uwhelper.crm import importer
+from uwhelper.crm import requests as docreq
 from uwhelper.crm import service as crm
+from uwhelper.crm import tasks as task_svc
 from uwhelper.crm.models import (
     PRODUCT_TYPES,
+    ActivityIn,
     ContactIn,
     ContactPatch,
     DealContactIn,
     DealIn,
     DealPatch,
     DealStatusIn,
+    DocumentRequestIn,
+    DocumentReviewIn,
     OrganizationIn,
     OrganizationPatch,
+    TaskIn,
+    TaskPatch,
 )
 from uwhelper.documents.storage import UploadRejected
 from uwhelper.repo.cases import ValidationFailure
@@ -49,6 +59,43 @@ def _json(data: Any, status: int = 200) -> JSONResponse:
 def session(request: Request) -> JSONResponse:
     return _json({"csrf_token": request.app.state.csrf_token, "version": __version__,
                   "header": "X-CSRF-Token"})
+
+
+class _CaseLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    case_id: str = Field(min_length=1, max_length=64)
+
+
+class _TaskStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["open", "done", "cancelled"]
+
+
+class _DocLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_id: str = Field(min_length=1, max_length=64)
+
+
+class _PartyContact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    contact_id: str | None = None
+    create: bool = False
+
+
+@router.get("/openapi.json", include_in_schema=False)
+def openapi(request: Request) -> JSONResponse:
+    """Schema of the local JSON API (no interactive UI: that would load assets from a CDN)."""
+    app = request.app
+    schema = getattr(app.state, "api_v1_openapi", None)
+    if schema is None:
+        full = app.openapi()  # generated in-process; nothing is fetched
+        schema = {**full, "paths": {p: v for p, v in full.get("paths", {}).items()
+                                    if p.startswith(("/api/v1", "/health", "/api/health"))}}
+        schema["info"] = {"title": "UW Helper local API", "version": __version__,
+                          "description": "Local-only API (127.0.0.1). Writes need the X-CSRF-Token header from "
+                                         "GET /api/v1/session. Errors: {error: {code, message, details, request_id}}."}
+        app.state.api_v1_openapi = schema
+    return JSONResponse(schema)
 
 
 @router.get("/meta")
@@ -193,6 +240,147 @@ def deal_underwriting(request: Request, deal_id: str) -> JSONResponse:
     with get_db(request).session() as conn:
         case_id = crm.start_underwriting_file(conn, deal_id)
         return _json({"loan_case_id": case_id, "url": f"/cases/{case_id}"}, 201)
+
+
+@router.post("/deals/{deal_id}/link-underwriting-file")
+def deal_link_underwriting(request: Request, deal_id: str, body: _CaseLink) -> JSONResponse:
+    with get_db(request).session() as conn:
+        crm.link_underwriting_file(conn, deal_id, body.case_id)
+        return _json(crm.get_deal(conn, deal_id))
+
+
+@router.get("/underwriting-files/unlinked")
+def unlinked_files(request: Request) -> JSONResponse:
+    with get_db(request).session() as conn:
+        return _json({"items": crm.unlinked_underwriting_files(conn)})
+
+
+@router.post("/underwriting-files/{case_id}/parties/{party_id}/contact")
+def party_contact(request: Request, case_id: str, party_id: str, body: _PartyContact) -> JSONResponse:
+    with get_db(request).session() as conn:
+        cid = crm.link_party_contact(conn, case_id, party_id, body.contact_id, create=body.create)
+        return _json({"contact_id": cid})
+
+
+@router.get("/deals/{deal_id}/timeline")
+def deal_timeline(request: Request, deal_id: str, limit: int = Query(200, ge=1, le=500)) -> JSONResponse:
+    with get_db(request).session() as conn:
+        crm.get_deal(conn, deal_id)
+        return _json({"items": acts.deal_timeline(conn, deal_id, limit)})
+
+
+# ---------------------------------------------------------------------------------------- document requests
+@router.get("/deals/{deal_id}/document-requests")
+def doc_requests(request: Request, deal_id: str) -> JSONResponse:
+    with get_db(request).session() as conn:
+        crm.get_deal(conn, deal_id)
+        return _json({"items": docreq.list_requests(conn, deal_id), "summary": docreq.summary(conn, deal_id)})
+
+
+@router.post("/deals/{deal_id}/document-requests/generate")
+def doc_requests_generate(request: Request, deal_id: str) -> JSONResponse:
+    with get_db(request).session() as conn:
+        added = docreq.generate_requests(conn, deal_id)
+        return _json({"added": added, "items": docreq.list_requests(conn, deal_id)}, 201 if added else 200)
+
+
+@router.post("/deals/{deal_id}/document-requests")
+def doc_request_add(request: Request, deal_id: str, body: DocumentRequestIn) -> JSONResponse:
+    with get_db(request).session() as conn:
+        rid = docreq.add_request(conn, deal_id, body)
+        return _json(docreq.get_request(conn, deal_id, rid), 201)
+
+
+@router.post("/deals/{deal_id}/document-requests/{request_id}/upload")
+def doc_request_upload(request: Request, deal_id: str, request_id: str, file: UploadFile = File(...)) -> JSONResponse:
+    with get_db(request).session() as conn:
+        try:
+            res = docreq.fulfil_with_upload(conn, request.app.state.settings, deal_id, request_id, file.file,
+                                            file.filename)
+        except UploadRejected as exc:
+            raise ValidationFailure(str(exc)) from None
+        return _json({**res, "request": docreq.get_request(conn, deal_id, request_id)}, 201)
+
+
+@router.post("/deals/{deal_id}/document-requests/{request_id}/link")
+def doc_request_link(request: Request, deal_id: str, request_id: str, body: _DocLink) -> JSONResponse:
+    with get_db(request).session() as conn:
+        docreq.fulfil_with_existing(conn, deal_id, request_id, body.document_id)
+        return _json(docreq.get_request(conn, deal_id, request_id))
+
+
+@router.post("/deals/{deal_id}/document-requests/{request_id}/review")
+def doc_request_review(request: Request, deal_id: str, request_id: str, body: DocumentReviewIn) -> JSONResponse:
+    with get_db(request).session() as conn:
+        docreq.review_request(conn, deal_id, request_id, body)
+        return _json(docreq.get_request(conn, deal_id, request_id))
+
+
+# ---------------------------------------------------------------------------------------- tasks
+@router.get("/tasks")
+def list_tasks(request: Request, view: str = "open", deal_id: str | None = None, contact_id: str | None = None,
+               organization_id: str | None = None, assignee: str | None = Query(None, max_length=120),
+               limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)) -> JSONResponse:
+    with get_db(request).session() as conn:
+        return _json({"items": task_svc.list_tasks(conn, view=view, deal_id=deal_id, contact_id=contact_id,
+                                                   organization_id=organization_id, assignee=assignee, limit=limit,
+                                                   offset=offset),
+                      "counts": task_svc.task_counts(conn), "limit": limit, "offset": offset})
+
+
+@router.post("/tasks")
+def create_task(request: Request, body: TaskIn) -> JSONResponse:
+    with get_db(request).session() as conn:
+        return _json(task_svc.get_task(conn, task_svc.create_task(conn, body)), 201)
+
+
+@router.get("/tasks/{task_id}")
+def get_task(request: Request, task_id: str) -> JSONResponse:
+    with get_db(request).session() as conn:
+        return _json(task_svc.get_task(conn, task_id))
+
+
+@router.patch("/tasks/{task_id}")
+def patch_task(request: Request, task_id: str, body: TaskPatch) -> JSONResponse:
+    with get_db(request).session() as conn:
+        changed = task_svc.update_task(conn, task_id, body)
+        return _json({"task": task_svc.get_task(conn, task_id), "changed": changed})
+
+
+@router.post("/tasks/{task_id}/status")
+def task_status(request: Request, task_id: str, body: _TaskStatus) -> JSONResponse:
+    with get_db(request).session() as conn:
+        task_svc.set_task_status(conn, task_id, body.status)
+        return _json(task_svc.get_task(conn, task_id))
+
+
+# ---------------------------------------------------------------------------------------- activities
+@router.get("/activities")
+def list_activities(request: Request, deal_id: str | None = None, contact_id: str | None = None,
+                    organization_id: str | None = None, limit: int = Query(200, ge=1, le=500)) -> JSONResponse:
+    with get_db(request).session() as conn:
+        return _json({"items": acts.list_activities(conn, deal_id=deal_id, contact_id=contact_id,
+                                                    organization_id=organization_id, limit=limit)})
+
+
+@router.post("/activities")
+def add_activity(request: Request, body: ActivityIn) -> JSONResponse:
+    with get_db(request).session() as conn:
+        return _json(acts.get_activity(conn, acts.add_activity(conn, body)), 201)
+
+
+# ---------------------------------------------------------------------------------------- import
+@router.post("/import/{kind}")
+def import_csv(request: Request, kind: Literal["contacts", "organizations"], file: UploadFile = File(...),
+               dry_run: bool = True, skip_invalid: bool = False) -> JSONResponse:
+    text = importer.decode(file.file.read(importer.MAX_BYTES + 1))
+    with get_db(request).session() as conn:
+        if dry_run:
+            p = importer.parse(conn, kind, text)
+            return _json({"dry_run": True, "counts": p.counts, "columns": p.columns, "ignored_columns": p.ignored_columns,
+                          "rows": [{"line": r.line, "status": r.status, "errors": r.errors} for r in p.rows]})
+        return _json({"dry_run": False, **importer.commit(conn, kind, text, skip_invalid=skip_invalid,
+                                                         source_name=file.filename)}, 201)
 
 
 @router.get("/pipeline")

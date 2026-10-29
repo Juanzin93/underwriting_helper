@@ -1,13 +1,17 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form, activity_form, activity_list, pager %}
 {% block title %}Organizations{% endblock %}
 {% block content %}
 <h1>Organizations</h1>
 <form method="get" class="actions panel"><input type="text" name="q" value="{{ q }}" placeholder="Search name" aria-label="Search">
-<select name="org_type" aria-label="Type"><option value="">All types</option>{% for t in org_types %}<option {% if org_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select><button class="small secondary">Filter</button></form>
+<select name="org_type" aria-label="Type"><option value="">All types</option>{% for t in org_types %}<option {% if org_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+<label class="check"><input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}> include archived</label><button class="small secondary">Filter</button>
+<a class="btn secondary small" href="/import?kind=organizations">Import CSV…</a></form>
 <table><tr><th>Name</th><th>Type</th><th>City / state</th><th>Phone</th><th>Website</th></tr>
-{% for o in orgs %}<tr><td><a href="/organizations/{{ o.id }}">{{ o.name }}</a></td><td>{{ o.org_type.replace('_',' ') }}</td><td class="small">{{ o.city or '' }} {{ o.state or '' }}</td><td class="small">{{ o.phone or '' }}</td><td class="small">{{ o.website or '' }}</td></tr>
-{% else %}<tr><td colspan="5" class="muted">No organizations yet.</td></tr>{% endfor %}</table>
+{% for o in orgs %}<tr><td><a href="/organizations/{{ o.id }}">{{ o.name }}</a>{% if o.archived %} <span class="badge superseded">archived</span>{% endif %}</td><td>{{ o.org_type.replace('_',' ') }}</td><td class="small">{{ o.city or '' }} {{ o.state or '' }}</td><td class="small">{{ o.phone or '' }}</td><td class="small">{{ o.website or '' }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No organizations match.</td></tr>{% endfor %}</table>
+{{ pager(orgs, limit, offset, base_query) }}
 <details class="panel" {% if not orgs %}open{% endif %}><summary>New organization</summary>
 <form method="post" action="/organizations">{{ csrf() }}
 <div class="row"><div style="flex:2 1 260px"><label>Name *</label><input type="text" name="name" required></div><div><label>Type *</label><select name="org_type">{% for t in org_types %}<option>{{ t }}</option>{% endfor %}</select></div><div><label>Industry</label><input type="text" name="industry"></div></div>

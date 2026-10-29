@@ -1,17 +1,21 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form, activity_form, activity_list, pager %}
 {% block title %}Deals{% endblock %}
 {% block content %}
 <h1>Deals pipeline</h1>
 <div class="pipeline" aria-label="Deals by status">{% for p in pipeline %}<span class="{{ 'done' if p.count else '' }}"><a href="?status={{ p.status }}">{{ p.status.replace('_',' ').title() }}</a>: <b>{{ p.count }}</b>{% if p.count %} · {{ p.requested_total|money }}{% endif %}</span>{% endfor %}</div>
 <form method="get" class="actions panel"><input type="text" name="q" value="{{ q }}" placeholder="Search name, number or borrower" aria-label="Search">
-<select name="status" aria-label="Status"><option value="">All statuses</option>{% for s in statuses %}<option {% if status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select><button class="small secondary">Filter</button></form>
+<select name="status" aria-label="Status"><option value="">All statuses</option>{% for s in statuses %}<option {% if status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+<select name="deal_type" aria-label="Deal type"><option value="">All types</option><option value="small_business" {% if deal_type == 'small_business' %}selected{% endif %}>Small business</option><option value="cre" {% if deal_type == 'cre' %}selected{% endif %}>CRE</option></select>
+<label class="check"><input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}> include archived</label><button class="small secondary">Filter</button></form>
 <table><tr><th>Deal</th><th>Type / product</th><th>Borrower</th><th class="num">Requested</th><th>Status</th><th>Underwriting file</th><th>Updated</th></tr>
 {% for d in deals %}<tr><td><a href="/deals/{{ d.id }}"><b>{{ d.deal_number }}</b></a><br><span class="small">{{ d.name }}</span></td>
 <td class="small">{{ 'CRE' if d.deal_type == 'cre' else 'Small business' }}<br>{{ d.product_type.replace('_',' ') }}</td><td>{{ d.borrower_name or '—' }}</td>
-<td class="num">{{ d.requested_amount|money }}</td><td><span class="stage">{{ d.status.replace('_',' ') }}</span></td>
+<td class="num">{{ d.requested_amount|money }}</td><td><span class="stage">{{ d.status.replace('_',' ') }}</span>{% if d.archived %} <span class="badge superseded">archived</span>{% endif %}</td>
 <td class="small">{% if d.loan_case_id %}<a href="/cases/{{ d.loan_case_id }}">{{ d.case_number }}</a> ({{ d.case_stage }}){% else %}—{% endif %}</td><td class="small">{{ d.updated_at[:10] }}</td></tr>
-{% else %}<tr><td colspan="7" class="muted">No deals yet.</td></tr>{% endfor %}</table>
+{% else %}<tr><td colspan="7" class="muted">No deals match.</td></tr>{% endfor %}</table>
+{{ pager(deals, limit, offset, base_query) }}
 
 <details class="panel" {% if not deals %}open{% endif %}><summary>New deal</summary>
 <form method="post" action="/deals">{{ csrf() }}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form %}
+{% block title %}Tasks{% endblock %}
+{% block content %}
+<h1>Tasks</h1>
+<div class="kpi">
+<div><b>{{ counts.open }}</b><span>open</span></div>
+<div><b>{{ counts.overdue }}</b><span>overdue</span></div>
+<div><b>{{ counts.due_today }}</b><span>due today</span></div>
+</div>
+<form method="get" class="actions panel">
+<select name="view" aria-label="View">{% for v in views %}<option value="{{ v }}" {% if v == view %}selected{% endif %}>{{ {'open':'Open','overdue':'Overdue','today':'Due today or earlier','week':'Due within 7 days','done':'Done / cancelled','all':'All'}[v] }}</option>{% endfor %}</select>
+<input type="text" name="assignee" value="{{ assignee }}" placeholder="Assignee" aria-label="Assignee"><button class="small secondary">Show</button></form>
+{{ task_table(tasks, '/tasks?view=' ~ view) }}
+<div class="panel">{{ task_form('/tasks', deals=deals) }}</div>
+<p class="small muted">Dates use this PC's local calendar. Tasks are reminders only — nothing is sent or scheduled outside the app.</p>
+{% endblock %}

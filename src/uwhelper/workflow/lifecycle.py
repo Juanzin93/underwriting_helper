@@ -206,6 +206,11 @@ def funding_blockers(conn, case_id: str) -> list[Blocker]:
     cl = conn.execute("SELECT * FROM closings WHERE case_id=?", (case_id,)).fetchone()
     if cl is None or not cl["scheduled_closing_date"]:
         b.append(Blocker("closing_record", "Closing date / closing record not entered.", False, f"/cases/{case_id}/closing"))
+    from uwhelper.crm.pipeline import case_transition_conflict
+
+    deal_conflict = case_transition_conflict(conn, case_id, "FUNDED")
+    if deal_conflict:
+        b.append(Blocker("linked_deal", deal_conflict, True, None))
     return b
 
 
@@ -254,7 +259,11 @@ def available_actions(conn: sqlite3.Connection, case_id: str) -> list[dict[str, 
     return actions
 
 
-def _write(conn, case, to_stage: str, reason: str, override: bool, blockers: list[Blocker], actor: str) -> None:
+def _write(conn, case, to_stage: str, reason: str, override: bool, blockers: list[Blocker],
+           actor: str | None) -> None:
+    from uwhelper.core.identity import current_actor
+
+    actor = actor or current_actor()
     now = utcnow()
     hold_return = case["stage"] if to_stage == "ON_HOLD" else None
     conn.execute("UPDATE loan_cases SET stage=?, stage_entered_at=?, hold_return_stage=?, updated_at=? WHERE id=?",
@@ -266,10 +275,13 @@ def _write(conn, case, to_stage: str, reason: str, override: bool, blockers: lis
     audit.record(conn, "workflow_transition", "loan_case", case["id"], case["id"],
                  {"from": case["stage"], "to": to_stage, "override": override, "reason": reason,
                   "overridden_blockers": [b.code for b in blockers]}, actor)
+    from uwhelper.crm.pipeline import on_case_stage
+
+    on_case_stage(conn, case["id"], to_stage, reason, actor)
 
 
 def transition(conn: sqlite3.Connection, case_id: str, to_stage: str, reason: str, *, override: bool = False,
-               actor: str = "local_user", _system: bool = False) -> str:
+               actor: str | None = None, _system: bool = False) -> str:
     """Move a case to another stage. Returns the new stage."""
     case = get_case(conn, case_id)
     reason = (reason or "").strip()
@@ -283,6 +295,11 @@ def transition(conn: sqlite3.Connection, case_id: str, to_stage: str, reason: st
     target = to_stage
     if to_stage == "RESUME":
         target = case["hold_return_stage"] or "INTAKE"
+    from uwhelper.crm.pipeline import case_transition_conflict
+
+    deal_conflict = case_transition_conflict(conn, case_id, target)
+    if deal_conflict:
+        raise TransitionRefused(deal_conflict)
     blockers = evaluate(conn, case_id, to_stage)
     hard = [b for b in blockers if b.hard]
     if hard:

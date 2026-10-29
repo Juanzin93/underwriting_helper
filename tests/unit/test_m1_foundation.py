@@ -155,7 +155,7 @@ def test_clean_database_initialises_from_migrations(settings):
 
 def test_upgrade_from_previous_schema_preserves_data(tmp_path, settings):
     """A database at schema 6 (previous release) with real records upgrades to the latest without data loss."""
-    from uwhelper.domain.models import BorrowerIn, CaseIn, FactIn, TermsIn
+    from uwhelper.domain.models import FactIn, TermsIn
     from uwhelper.repo import cases, facts
 
     old_dir = tmp_path / "m6"
@@ -167,8 +167,14 @@ def test_upgrade_from_previous_schema_preserves_data(tmp_path, settings):
     settings.ensure_dirs()
     with db.session() as c:
         assert apply_migrations(c, old_dir) == [1, 2, 3, 4, 5, 6]
-        cid = cases.create_case(c, CaseIn(title="Pre-upgrade", loan_type="equipment"), BorrowerIn(legal_name="Old Co"),
-                                TermsIn(requested_amount="100000", interest_rate="8", amortization_months=60))
+        # Seed rows the way the previous release wrote them (today's code expects newer tables).
+        cid, now = "c" * 32, "2026-01-01T00:00:00+00:00"
+        c.execute("INSERT INTO loan_cases(id, case_number, title, loan_type, stage, stage_entered_at, created_at, "
+                  "updated_at) VALUES (?, 'UW-2026-0001', 'Pre-upgrade', 'equipment', 'INTAKE', ?, ?, ?)",
+                  (cid, now, now, now))
+        c.execute("INSERT INTO borrowers(id, case_id, legal_name, created_at, updated_at) VALUES ('b1', ?, 'Old Co', ?, ?)",
+                  (cid, now, now))
+        cases.save_terms(c, cid, TermsIn(requested_amount="100000", interest_rate="8", amortization_months=60))
         facts.add_user_fact(c, cid, FactIn(field_key="revenue", value="900000", period_end="2025-12-31",
                                            period_months=12, mark_verified=True))
         before = {t: c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
@@ -312,7 +318,7 @@ def test_deal_workflow_and_status_rules(api):
     assert [h["to_status"] for h in d["history"]] == ["INTAKE", "UNDERWRITING", "STRUCTURING", "LENDER_SUBMISSION",
                                                       "APPROVED", "ON_HOLD", "APPROVED", "DUE_DILIGENCE", "CLOSING",
                                                       "FUNDED"]
-    assert d["allowed_transitions"] == []
+    assert d["allowed_transitions"] == ["SERVICING"]  # funded deals can only move on to servicing
     assert api.patch(f"/api/v1/deals/{did}", {"name": "changed"}).status_code == 422
 
 

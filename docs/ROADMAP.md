@@ -4,34 +4,42 @@ Rules for every milestone: local-only by default, forward-only migrations with a
 release, temporary DB/files in tests, no network in unit tests, humans make every approval/decline/funding decision,
 Python (not the LLM) does all arithmetic.
 
-## Milestone 1 — foundation ✅ (this release)
+## Milestone 1 — foundation ✅
 Settings, SQLite strategy, migration 0007, organizations/contacts/deals, audit, document ingestion service, health
 endpoint, JSON error format, `/api/v1`, navigation, lock file, Windows guide. See ARCHITECTURE_ASSESSMENT.md.
 
-## Milestone 2 — shared CRM, borrower, deal, document and task workflows (next)
+## Milestone 2 — shared CRM, borrower, deal, document and task workflows ✅
 
-Ordered by dependency. Each item lands as its own commit with tests.
+| # | Delivered | Verified by (`tests/unit/test_m2_crm_workflows.py` unless noted) |
+|---|---|---|
+| 2.1 | Deal statuses CREDIT_REVIEW and SERVICING; recorded case↔deal sync; guards against contradictory terminal states; link an existing file to a deal (docs/LIFECYCLE.md) | `test_case_funding_syncs_*`, `test_case_decline_*`, `test_deal_withdrawal_*`, `test_guards_*`, `test_link_existing_*` |
+| 2.2 | `borrowers.organization_id` (backfilled by migration 0008, case-insensitive, no duplicates), new/renamed borrowers linked automatically, guarantors copied from deals with contact links, owner → contact link on the file page; purging a file removes an organization auto-created for it if nothing else uses it | `test_upgrade_from_schema7_*`, `test_case_borrower_*`, `test_purge_removes_auto_created_org_*`, real M1 database upgraded |
+| 2.3 | Actor = Windows account name (or `UWH_ACTOR_NAME`) on audit events, status history, tasks and notes | `test_actor_*` |
+| 2.4 | Tasks (deal/contact/organization), My tasks page with overdue/today/week views, API | `test_tasks_*` |
+| 2.5 | Document checklist per deal from versioned `crm/checklists/deal_documents.yaml`; requested → received → accepted/rejected, waivers with reasons, named reviewer; files flow into the linked underwriting file | `test_document_request_*`, `test_checklist_*` |
+| 2.6 | Append-only notes/calls/meetings/emails with corrections; deal timeline (activities, status, events, tasks); note text never in the audit log or log file | `test_activities_*`, `test_deal_timeline_*` |
+| 2.7 | Search, type filters, archived toggle, paging, archive/restore for deals, contacts, organizations; CSV import with preview, idempotent, all-or-nothing (1,000 rows well under 5 s) | `test_csv_import_*`, `test_search_*` |
+| 2.8 | API for all of the above; offline OpenAPI schema at `/api/v1/openapi.json` (no CDN UI); HTML routes delegate to services | `test_api_endpoints_end_to_end`, `test_offline_openapi_schema`, `test_web_pages_and_forms` |
+
+Also fixed: CRM templates were missing from package data (non-editable installs); flash messages were lost on
+redirects with a `#fragment`; wide tables caused horizontal scrolling on phones.
+
+## Milestone 3 — evidence-backed extraction and business/CRE underwriting (next)
 
 | # | Item | Depends on | Acceptance criteria |
 |---|---|---|---|
-| 2.1 | **One pipeline truth.** Deal status owns the brokerage pipeline; the linked loan case keeps the underwriting lifecycle. Add CREDIT_REVIEW and SERVICING to deal statuses (migration recreates the CHECK). Sync rules: case FUNDED ⇒ deal FUNDED (system, with the case's funding confirmation as authorization); deal WITHDRAWN/CANCELLED/DECLINED ⇒ prompt to close the case; no silent two-way sync | M1 | Table of mappings in LIFECYCLE.md; tests for every sync rule; a deal and its case can never show contradictory terminal states |
-| 2.2 | **Borrower entity.** Link `borrowers` (per case) to `organizations` (`borrowers.organization_id`), backfill by exact name match into existing orgs, else create; guarantors/owners (`parties`) link to `contacts` | 2.1 | Upgrade test on a schema-7 DB with cases: every case borrower has an org, counts unchanged, no duplicates for same name+type; case pages show the org link |
-| 2.3 | **Actor identity.** Record the Windows user (`getpass.getuser()`) as `actor` on audit events and status history alongside typed "authorized by" | M1 | Audit rows show the OS user; tests mock the user; no network calls |
-| 2.4 | **Tasks and follow-ups.** `tasks` table (deal/contact/org nullable FKs, title, due date, status, priority, completed_at), "My tasks" dashboard, overdue badges, API endpoints | 2.3 | CRUD + completion audited; overdue query tested across date boundaries; tasks survive deal archive |
-| 2.5 | **Document requests per deal.** Needed-items checklist by product type (from YAML, versioned like policies), states requested → received → accepted/rejected, linked to `deal_documents`; carried into the underwriting file | 2.1 | Checklist generated per product; upload marks "received"; acceptance needs a person; carry-over test |
-| 2.6 | **Activity timeline and notes.** Append-only `activities` (note, call, email-logged-manually, meeting) per deal/contact/org; timeline merges activities, status history and audit | 2.3 | Notes immutable (corrections append); timeline ordering test; note text never written to the log file |
-| 2.7 | **Search, filters, pagination, archive** for deals/contacts/orgs in UI and API; CSV import of contacts/organizations (local file, preview + confirm) | 2.2 | Import is idempotent on email/name; invalid rows reported, none partially imported; 1k-row import < 5 s |
-| 2.8 | **Service-layer cleanup** of HTML routes touched above; API tests for every endpoint; offline OpenAPI JSON at `/api/v1/openapi.json` (no CDN UI) | — | Route handlers contain no SQL in touched areas; schema served without external assets |
+| 3.1 | **Pinned extraction runs.** Record model name + digest (from local Ollama `/api/show`), prompt template hash, document SHA-256 and page range on every extraction run; show them on facts | M2 | Re-running extraction on the same inputs shows identical provenance; facts link to run + page; no network beyond loopback |
+| 3.2 | **Evidence view per metric.** From any metric, list the verified facts, their pages and the formula (existing data, new page) | 3.1 | Every computed metric in a run links to ≥ 1 verified fact or is marked user-entered |
+| 3.3 | **CRE module.** Today NOI, property DSCR and debt yield are computed from property totals inside the commercial module. Split out a CRE module with unit/lease-level rent roll, T-12 lines, taxes, insurance, reserves, and add cap-rate value, DSCR at a stressed rate, breakeven occupancy and lease-rollover exposure; illustrative CRE policy v2 | — | Metrics computed in Decimal with tests against hand-worked examples; missing inputs → UNKNOWN, never zero |
+| 3.4 | **Rent-roll and T-12 import** from CSV/XLSX-exported CSV with column mapping preview (same pattern as the CRM import) | 3.3 | Totals reconcile to the source; mismatches block "verified" |
+| 3.5 | **Versioned rule sets with effective dates** across both modules; run records rule-set version; diff view between versions | 3.3 | Old runs reproduce exactly with their original rule versions |
+| 3.6 | **Credit memo per deal** combining the file's run, deal summary, sponsors/guarantors (contacts) and document checklist status | 2.x, 3.2 | Memo cites run number and checklist version; regenerating an old memo gives the same text |
 
-Exit criteria: all tests pass; upgrade from a schema-7 database with data verified; a broker can take a deal from
-intake to lender submission with contacts, tasks, document requests and a linked underwriting file without leaving the app.
+Exit criteria: a CRE deal can go from rent roll + T-12 to a reproducible run and memo with every number traced to a page or
+a named person's entry.
 
 ## Backlog (planned, not started)
 
-* **M3 — Evidence-backed extraction and underwriting.** Extraction runs pinned to document hashes and model/prompt
-  versions; business underwriting (existing) and **CRE** module (rent roll, T-12, NOI, cap rate, debt yield, DSCR at
-  stressed rates); versioned rule sets with effective dates; credit memo per deal. *Accept:* every metric traces to
-  verified facts with page references; rerunning an old run reproduces it.
 * **M4 — Lender and product catalog.** `lenders`, `lender_programs`, `program_criteria` with **versions** and
   `verified_at`/source fields; manual entry and local file import; explainable matching (each criterion PASS/FAIL/
   UNKNOWN with reason); stale-criteria warnings. *Accept:* matches cite the criteria version; stale data flagged.
@@ -54,4 +62,4 @@ INTAKE → UNDERWRITING → CREDIT_REVIEW → STRUCTURING → LENDER_SUBMISSION 
 any open status → ON_HOLD (resume returns to the prior status) | WITHDRAWN | CANCELLED | DECLINED*
 * human authorization + confirmation required
 ```
-M1 implements this on deals except CREDIT_REVIEW and SERVICING (added in M2.1).
+Implemented on deals since M2 (CREDIT_REVIEW optional for brokered deals).

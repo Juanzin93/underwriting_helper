@@ -103,7 +103,10 @@ def render(request: Request, name: str, status_code: int = 200, **ctx: Any) -> H
 
 def redirect(url: str, msg: str | None = None, level: str = "info") -> RedirectResponse:
     if msg:
+        url, _, fragment = url.partition("#")
         url += ("&" if "?" in url else "?") + urlencode({"msg": msg[:300], "level": level})
+        if fragment:
+            url += "#" + fragment
     return RedirectResponse(url, status_code=303)
 
 

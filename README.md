@@ -21,7 +21,9 @@ structuring, due diligence, closing, funding and servicing — entirely on your 
   (manual or CSV), delinquency, modifications, covenants, monitoring alerts and a portfolio view;
 * keeps a **hash-chained (tamper-evident) audit log**;
 * tracks **organizations, contacts and deals** (brokerage pipeline with human-authorized approval/decline/funding),
-  with a local JSON API (`/api/v1`) and a `/health` endpoint.
+  kept consistent with each deal's underwriting file, plus **tasks**, a per-deal **document checklist**,
+  append-only **notes/activity timeline** and **CSV import** of contacts/organizations;
+* offers a local JSON API (`/api/v1`, schema at `/api/v1/openapi.json`) and a `/health` endpoint.
 
 Step-by-step Windows install, configuration, backup and restore: **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**.
 Plan and risks: [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE_ASSESSMENT.md](docs/ARCHITECTURE_ASSESSMENT.md).
@@ -96,7 +98,7 @@ record or import payments, covenants, alerts) → **Portfolio** (top menu).
 ## 3. Tests
 
 ```powershell
-scripts\run_tests.ps1                # 257 tests (2 need Ollama); no Ollama or internet needed
+scripts\run_tests.ps1                # 287 tests (2 need Ollama); no Ollama or internet needed
 scripts\run_tests.ps1 -Ollama        # also runs live tests against your local model
 # or: .\.venv\Scripts\python -m pytest -q
 ```
@@ -140,8 +142,8 @@ none are implemented yet.
 ### Local JSON API and health
 
 `GET /health` → `ok` / `degraded` (Ollama or OCR missing; everything else works) / HTTP 503 (database unavailable).
-`/api/v1` covers organizations, contacts, deals (status changes, contacts, documents, underwriting file) and the
-pipeline. Writes need the `X-CSRF-Token` header from `GET /api/v1/session`. Errors always look like
+`/api/v1` covers organizations, contacts, deals (status changes, contacts, documents, document checklist, underwriting
+file, timeline), tasks, activities, CSV import and the pipeline; `/api/v1/openapi.json` describes it (no online docs UI). Writes need the `X-CSRF-Token` header from `GET /api/v1/session`. Errors always look like
 `{"error": {"code", "message", "details", "request_id"}}` with a matching `X-Request-ID` header.
 
 ## 6. Architecture
@@ -150,7 +152,7 @@ pipeline. Writes need the `X-CSRF-Token` header from `GET /api/v1/session`. Erro
 src/uwhelper/
   config.py            settings (.env/toml/env) + loopback/cloud-model/integration validation
   core/                error envelope, request IDs
-  crm/                 organizations, contacts, deals, deal pipeline (brokerage)
+  crm/                 organizations, contacts, deals, pipeline sync, tasks, document checklists, activities, CSV import
   integrations/        disabled-by-default registry for future opt-in adapters (none implemented)
   db/                  SQLite connection, transactions, checksum-verified migrations (migrations/*.sql)
   domain/              Decimal money parsing/rounding, enums, Pydantic input models
@@ -178,7 +180,7 @@ periods, verified-only) → metrics (Python) → policy engine → immutable run
 closing → human-confirmed funding → servicing.**
 
 Upgrading an existing installation: pull the new code, run `pip install -e . --no-deps`, back up, then start the app —
-migrations 0002–0007 run automatically, existing cases start in INTAKE and keep working without a deal (nothing is deleted).
+migrations 0002–0008 run automatically, existing cases start in INTAKE, keep working without a deal, and their borrowers are linked to organizations (nothing is deleted).
 
 More detail: [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md), [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE_ASSESSMENT.md](docs/ARCHITECTURE_ASSESSMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with ER diagram), [docs/METRICS.md](docs/METRICS.md),
 [docs/POLICIES.md](docs/POLICIES.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/OPERATIONS.md](docs/OPERATIONS.md),

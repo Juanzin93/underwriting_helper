@@ -44,8 +44,11 @@ def record(
     entity_id: str | None = None,
     case_id: str | None = None,
     details: dict[str, Any] | None = None,
-    actor: str = "local_user",
+    actor: str | None = None,
 ) -> None:
+    from uwhelper.core.identity import current_actor
+
+    actor = actor or current_actor()
     details_json = json.dumps(details or {}, default=str, sort_keys=True)
     occurred = utcnow()
     with Database.transaction(conn):  # write lock held while reading the chain head

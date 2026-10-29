@@ -13,6 +13,9 @@ log = logging.getLogger("uwhelper")
 
 
 def initialise(settings: Settings) -> tuple[Database, LoadReport]:
+    from uwhelper.core.identity import set_actor
+
+    set_actor(settings.actor_name)
     settings.ensure_dirs()
     db = Database(settings.db_path, settings.db_busy_timeout_ms)
     with db.session() as conn:

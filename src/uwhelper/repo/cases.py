@@ -43,7 +43,14 @@ def _check_loan_type(module_key: str, loan_type: str) -> None:
         raise ValidationFailure(f"{spec.label} is a later extension and is not implemented yet.")
 
 
-def create_case(conn: sqlite3.Connection, case: CaseIn, borrower: BorrowerIn, terms: TermsIn | None = None) -> str:
+def _borrower_org(conn: sqlite3.Connection, borrower: BorrowerIn, case_id: str) -> str:
+    from uwhelper.crm.service import ensure_borrower_organization
+
+    return ensure_borrower_organization(conn, borrower.legal_name, borrower.industry, case_id)
+
+
+def create_case(conn: sqlite3.Connection, case: CaseIn, borrower: BorrowerIn, terms: TermsIn | None = None,
+                borrower_organization_id: str | None = None) -> str:
     _check_loan_type("commercial", case.loan_type)
     case_id, now = new_id(), utcnow()
     with Database.transaction(conn):
@@ -57,11 +64,13 @@ def create_case(conn: sqlite3.Connection, case: CaseIn, borrower: BorrowerIn, te
         )
         conn.execute("INSERT INTO workflow_transitions(case_id, from_stage, to_stage, reason, occurred_at) "
                      "VALUES (?, NULL, 'INTAKE', 'Case created', ?)", (case_id, now))
+        org_id = borrower_organization_id or _borrower_org(conn, borrower, case_id)
         conn.execute(
             """INSERT INTO borrowers(id, case_id, legal_name, dba_name, entity_type, industry, naics_code,
-                   state_of_formation, year_established, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   state_of_formation, year_established, organization_id, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (new_id(), case_id, borrower.legal_name, borrower.dba_name, borrower.entity_type, borrower.industry,
-             borrower.naics_code, borrower.state_of_formation, borrower.year_established, now, now),
+             borrower.naics_code, borrower.state_of_formation, borrower.year_established, org_id, now, now),
         )
         audit.record(conn, "case_created", "loan_case", case_id, case_id,
                      {"case_number": number, "loan_type": case.loan_type, "policy_key": case.policy_key})
@@ -75,6 +84,11 @@ def update_case(conn: sqlite3.Connection, case_id: str, case: CaseIn, borrower: 
     before = get_case(conn, case_id)
     now = utcnow()
     with Database.transaction(conn):
+        old_name = (before["borrower"].get("legal_name") or "").strip().casefold()
+        org_id = before["borrower"].get("organization_id")
+        if not org_id or borrower.legal_name.strip().casefold() != old_name:
+            org_id = _borrower_org(conn, borrower, case_id)  # renamed borrower → its own organization (old one is kept)
+        conn.execute("UPDATE borrowers SET organization_id=? WHERE case_id=?", (org_id, case_id))
         conn.execute(
             """UPDATE loan_cases SET title=?, loan_type=?, policy_key=?, policy_version=?, notes=?, updated_at=?
                WHERE id=?""",
@@ -328,6 +342,23 @@ def list_collateral(conn: sqlite3.Connection, case_id: str) -> list[dict[str, An
 
 
 # ---------------------------------------------------------------- deletion
+def _delete_unused_auto_orgs(conn: sqlite3.Connection, org_ids: list[str]) -> int:
+    """Delete borrower organizations auto-created for a purged file if nothing else uses or edited them."""
+    n = 0
+    for oid in org_ids:
+        used = conn.execute(
+            """SELECT (SELECT COUNT(*) FROM borrowers WHERE organization_id=:o)
+                    + (SELECT COUNT(*) FROM deals WHERE borrower_organization_id=:o)
+                    + (SELECT COUNT(*) FROM organization_contacts WHERE organization_id=:o)
+                    + (SELECT COUNT(*) FROM tasks WHERE organization_id=:o)
+                    + (SELECT COUNT(*) FROM activities WHERE organization_id=:o)
+                    + (SELECT COUNT(*) FROM audit_events WHERE entity_type='organization' AND entity_id=:o)""",
+            {"o": oid}).fetchone()[0]
+        if not used:
+            n += conn.execute("DELETE FROM organizations WHERE id=?", (oid,)).rowcount
+    return n
+
+
 def purge_case(conn: sqlite3.Connection, case_id: str, documents_dir: Path, reports_dir: Path) -> dict[str, int]:
     """Permanently delete a case, its records, reports and any documents not used by another case."""
     case = get_case(conn, case_id)
@@ -347,11 +378,15 @@ def purge_case(conn: sqlite3.Connection, case_id: str, documents_dir: Path, repo
             conn.execute("DELETE FROM documents WHERE id=?", (d["id"],))
         # Deletion is a privacy operation: the case's audit trail (which may hold
         # amounts) goes too; one tombstone event without financial data remains.
+        auto_orgs = [r["entity_id"] for r in conn.execute(
+            "SELECT entity_id FROM audit_events WHERE case_id=? AND action='organization_created'", (case_id,))]
         audit.preserve_hashes_before_purge(conn, case_id)
         conn.execute("DELETE FROM audit_events WHERE case_id=?", (case_id,))
         conn.execute("DELETE FROM loan_cases WHERE id=?", (case_id,))
+        orgs_deleted = _delete_unused_auto_orgs(conn, auto_orgs)
         audit.record(conn, "case_purged", "loan_case", case_id, None,
-                     {"case_number": case["case_number"], "documents_deleted": len(doc_rows)})
+                     {"case_number": case["case_number"], "documents_deleted": len(doc_rows),
+                      "organizations_deleted": orgs_deleted})
     removed = 0
     for d in doc_rows:
         p = documents_dir / d["stored_name"]

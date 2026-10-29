@@ -93,6 +93,8 @@ class Settings:
     documents_path: Path | None = None
     db_busy_timeout_ms: int = 30000
     log_level: str = "INFO"
+    # Name recorded as the actor on audit events; default = the Windows/OS account name.
+    actor_name: str | None = None
     ollama_health_timeout_seconds: float = 2.0
 
     # Optional external integrations: OFF unless both the master switch and the named integration are enabled.

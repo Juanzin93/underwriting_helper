@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -177,3 +177,63 @@ class DealContactIn(BaseModel):
     model_config = ConfigDict(**_CFG)
     contact_id: str
     role: ContactType
+
+
+# ------------------------------------------------------------------------------------------ Milestone 2
+class TaskIn(BaseModel):
+    model_config = ConfigDict(**_CFG)
+    title: str = Field(min_length=2, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    deal_id: str | None = None
+    contact_id: str | None = None
+    organization_id: str | None = None
+    due_date: date | None = None
+    priority: Literal["low", "normal", "high"] = "normal"
+    assignee: str | None = Field(default=None, max_length=120)
+
+    _b = field_validator("description", "deal_id", "contact_id", "organization_id", "due_date", "assignee",
+                         mode="before")(_blank)
+
+
+class TaskPatch(BaseModel):
+    model_config = ConfigDict(**_CFG)
+    title: str | None = Field(default=None, min_length=2, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    due_date: date | None = None
+    priority: Literal["low", "normal", "high"] | None = None
+    assignee: str | None = Field(default=None, max_length=120)
+
+
+class DocumentRequestIn(BaseModel):
+    """A manual needed-item on a deal (checklist items come from the versioned checklist file)."""
+    model_config = ConfigDict(**_CFG)
+    label: str = Field(min_length=2, max_length=200)
+    doc_type: str = "other"
+    required: bool = True
+    note: str | None = Field(default=None, max_length=1000)
+
+    _b = field_validator("note", mode="before")(_blank)
+
+
+class DocumentReviewIn(BaseModel):
+    model_config = ConfigDict(**_CFG)
+    decision: Literal["accepted", "rejected", "waived"]
+    reviewed_by: str = Field(min_length=2, max_length=120)
+    note: str | None = Field(default=None, max_length=1000)
+
+    _b = field_validator("note", mode="before")(_blank)
+
+
+class ActivityIn(BaseModel):
+    model_config = ConfigDict(**_CFG)
+    kind: Literal["note", "call", "email", "meeting", "other"] = "note"
+    subject: str = Field(min_length=2, max_length=200)
+    body: str | None = Field(default=None, max_length=20000)
+    occurred_at: datetime | None = None
+    deal_id: str | None = None
+    contact_id: str | None = None
+    organization_id: str | None = None
+    corrects_activity_id: str | None = None
+
+    _b = field_validator("body", "occurred_at", "deal_id", "contact_id", "organization_id", "corrects_activity_id",
+                         mode="before")(_blank)

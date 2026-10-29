@@ -122,7 +122,7 @@ def open_account(conn: sqlite3.Connection, case_id: str, a: OpenAccountIn) -> st
                           add_months(fd, 24), 24)
         audit.record(conn, "servicing_account_opened", "servicing_account", acct_id, case_id,
                      {"loan_number": loan_number, "funded_principal": dstr(funded), "grace_days": a.grace_days})
-        lifecycle._write(conn, get_case(conn, case_id), "SERVICING", "Servicing account opened", False, [], "local_user")
+        lifecycle._write(conn, get_case(conn, case_id), "SERVICING", "Servicing account opened", False, [], None)
     return acct_id
 
 

@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form, activity_form, activity_list %}
 {% block title %}{{ deal.deal_number }}{% endblock %}
 {% block content %}
 <p><a href="/deals">← Deals</a></p>
-<h1 style="margin-bottom:0">{{ deal.deal_number }} · {{ deal.name }}</h1>
+<h1 style="margin-bottom:0">{{ deal.deal_number }} · {{ deal.name }}{% if deal.archived %} <span class="badge superseded">ARCHIVED</span>{% endif %}</h1>
 <div class="stagebar"><span class="stage">Deal status: {{ deal.status.replace('_',' ') }}</span>
 <span class="small muted">{{ 'CRE' if deal.deal_type == 'cre' else 'Small business' }} · {{ deal.product_type.replace('_',' ') }} · requested {{ deal.requested_amount|money }} · since {{ deal.status_changed_at[:16].replace('T',' ') }}</span>
 {% if deal.loan_case_id %}<span class="small">Underwriting file: <a href="/cases/{{ deal.loan_case_id }}">{{ deal.case_number }}</a> (stage {{ deal.case_stage }})</span>{% endif %}</div>
+{% for n in deal.alignment_notes %}<div class="warning-box">{{ n }}</div>{% endfor %}
 
 <div class="grid2">
 <div class="panel"><h2 style="margin-top:0">Change status</h2>
@@ -17,9 +19,13 @@
 <div class="row"><div><label>Authorized by (required for {{ needs_auth|sort|join(', ') }})</label><input type="text" name="authorized_by"></div></div>
 <label class="check"><input type="checkbox" name="confirm"> This reflects a human decision recorded outside the software (needed for approval, funding, decline)</label>
 <p><button class="small">Change status</button></p></form>
-{% else %}<p class="muted">No further status changes (funded).</p>{% endif %}
+{% else %}<p class="muted">No further status changes ({{ deal.status.lower() }}).</p>{% endif %}
 {% if not deal.loan_case_id %}<form method="post" action="/deals/{{ deal.id }}/underwriting-file" class="inline" data-confirm="Create an underwriting file from this deal?">{{ csrf() }}<button class="small secondary">Start underwriting file</button></form>
-<p class="small muted">Creates a linked underwriting case (borrower name, requested amount and deal documents are copied).</p>{% endif %}
+<p class="small muted">Creates a linked underwriting case (borrower, requested amount, guarantors and deal documents are copied).</p>
+{% if unlinked_files %}<form method="post" action="/deals/{{ deal.id }}/link-underwriting-file" class="actions">{{ csrf() }}
+<select name="case_id" aria-label="Existing underwriting file">{% for f in unlinked_files %}<option value="{{ f.id }}">{{ f.case_number }} · {{ f.title }} ({{ f.stage }})</option>{% endfor %}</select>
+<button class="small secondary">Link existing file</button></form>{% endif %}{% endif %}
+<p class="small muted">Funding, servicing, declines, withdrawals and cancellations on the underwriting file update this deal automatically (recorded in the history below); withdrawing or cancelling the deal closes a file that has not been funded.</p>
 </div>
 <div class="panel"><h2 style="margin-top:0">Details</h2>
 <form method="post" action="/deals/{{ deal.id }}/edit">{{ csrf() }}
@@ -32,7 +38,7 @@
 <label>Loan purpose</label><input type="text" name="loan_purpose" value="{{ deal.loan_purpose or '' }}">
 <label>Collateral summary</label><input type="text" name="collateral_summary" value="{{ deal.collateral_summary or '' }}">
 <label>Notes</label><textarea name="notes">{{ deal.notes or '' }}</textarea>
-{% if deal.status != 'FUNDED' %}<p><button class="small">Save</button></p>{% endif %}</form></div></div>
+{% if deal.status not in ('FUNDED', 'SERVICING') %}<p><button class="small">Save</button></p>{% endif %}</form></div></div>
 
 <div class="grid2">
 <div class="panel"><h2 style="margin-top:0">Contacts</h2>
@@ -47,7 +53,47 @@
 <input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.txt"><select name="doc_type" aria-label="Document type">{% for k, v in doc_types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="small">Upload</button></form>
 <p class="small muted">Stored locally under a hash-based internal name (max {{ settings.max_upload_mb }} MB; PDF, image or text). Identical files are stored once.</p></div></div>
 
+<h2 id="documents">Document checklist</h2>
+<p class="small">{{ request_summary.required_outstanding }} required item(s) outstanding · {{ request_summary.accepted }} accepted · {{ request_summary.waived }} waived · {{ request_summary.total }} total</p>
+<table><tr><th>Item</th><th>Status</th><th>File</th><th>Reviewed</th><th>Actions</th></tr>
+{% for r in requests %}<tr>
+<td>{{ r.label }}{% if r.required %} <span class="small muted">required</span>{% endif %}<br><span class="small muted">{{ doc_types.get(r.doc_type, r.doc_type) }}{% if r.checklist_version %} · checklist {{ r.checklist_version }}{% endif %}</span></td>
+<td><span class="badge {{ {'accepted':'verified','rejected':'rejected','received':'candidate','waived':'superseded'}.get(r.status, '') }}">{{ r.status }}</span></td>
+<td class="small">{{ r.original_filename or '—' }}{% if r.sha256 %} <span class="mono">{{ r.sha256[:8] }}</span>{% endif %}</td>
+<td class="small">{% if r.reviewed_by %}{{ r.reviewed_by }}<br>{{ r.reviewed_at[:10] }}{% endif %}{% if r.note %}<br><span class="muted">{{ r.note }}</span>{% endif %}</td>
+<td>{% if r.status in ('requested', 'rejected', 'received') %}
+{% if r.status != 'received' %}<form method="post" action="/deals/{{ deal.id }}/requests/{{ r.id }}/upload?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data" class="actions">
+<input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.txt" aria-label="File for {{ r.label }}"><button class="small">Upload</button></form>
+{% if deal.documents %}<form method="post" action="/deals/{{ deal.id }}/requests/{{ r.id }}/link" class="actions">{{ csrf() }}<select name="document_id" aria-label="Existing document">{% for d in deal.documents %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select><button class="small secondary">Use existing</button></form>{% endif %}{% endif %}
+<details><summary class="small">Review / waive</summary><form method="post" action="/deals/{{ deal.id }}/requests/{{ r.id }}/review">{{ csrf() }}
+<select name="decision" aria-label="Decision">{% if r.status == 'received' %}<option value="accepted">accept</option><option value="rejected">reject</option>{% endif %}<option value="waived">waive</option></select>
+<input type="text" name="reviewed_by" placeholder="Your name *" required minlength="2" aria-label="Reviewed by">
+<input type="text" name="note" placeholder="Note (required to reject or waive)" aria-label="Note"><button class="small secondary">Record</button></form></details>
+{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No document requests yet.</td></tr>{% endfor %}</table>
+<div class="actions"><form method="post" action="/deals/{{ deal.id }}/generate-requests" class="inline">{{ csrf() }}<button class="small secondary">Add checklist items for {{ deal.product_type.replace('_',' ') }}</button></form></div>
+<details><summary>Request another document</summary><form method="post" action="/deals/{{ deal.id }}/add-request" class="actions">{{ csrf() }}
+<input type="text" name="label" placeholder="What is needed *" required minlength="2" aria-label="Label">
+<select name="doc_type" aria-label="Document type">{% for k, v in doc_types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+<label class="check"><input type="checkbox" name="required" checked> required</label><button class="small">Add</button></form></details>
+<p class="small muted">Checklist items are illustrative defaults from <span class="mono">crm/checklists/deal_documents.yaml</span>. Accepting or waiving needs a named person. Files go into the deal and, if linked, its underwriting file.</p>
+
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Tasks</h2>
+{{ task_table(tasks, '/deals/' ~ deal.id, show_links=False) }}
+{{ task_form('/deals/' ~ deal.id, deal_id=deal.id) }}</div>
+<div class="panel"><h2 style="margin-top:0">Notes &amp; activity</h2>
+{{ activity_form('/deals/' ~ deal.id, deal_id=deal.id) }}
+{{ activity_list(activities, '/deals/' ~ deal.id, deal_id=deal.id) }}</div></div>
+
+<h2>Timeline</h2>
+<table><tr><th>When (UTC)</th><th>What</th><th>By</th></tr>
+{% for i in timeline %}<tr><td class="small">{{ (i.at or '')[:16].replace('T',' ') }}</td>
+<td><span class="badge">{{ i.kind }}</span> {% if i.superseded %}<s>{{ i.title }}</s>{% else %}{{ i.title }}{% endif %}{% if i.body and i.type == 'status' %}<br><span class="small muted">{{ i.body }}</span>{% endif %}</td>
+<td class="small">{{ i.actor or '' }}</td></tr>{% endfor %}</table>
+
 <h2>Status history</h2>
-<table><tr><th>When (UTC)</th><th>From</th><th>To</th><th>Reason</th><th>Authorized by</th></tr>
-{% for h in deal.history|reverse %}<tr><td class="small">{{ h.occurred_at }}</td><td>{{ h.from_status or '—' }}</td><td><b>{{ h.to_status }}</b></td><td class="small">{{ h.reason }}</td><td>{{ h.authorized_by or '' }}</td></tr>{% endfor %}</table>
+<table><tr><th>When (UTC)</th><th>From</th><th>To</th><th>Reason</th><th>Authorized by</th><th>Recorded by</th></tr>
+{% for h in deal.history|reverse %}<tr><td class="small">{{ h.occurred_at }}</td><td>{{ h.from_status or '—' }}</td><td><b>{{ h.to_status }}</b></td><td class="small">{{ h.reason }}</td><td>{{ h.authorized_by or '' }}</td><td class="small">{{ h.actor }}</td></tr>{% endfor %}</table>
+<form method="post" action="/deals/{{ deal.id }}/{{ 'unarchive' if deal.archived else 'archive' }}" class="actions">{{ csrf() }}<button class="small secondary">{{ 'Restore deal' if deal.archived else 'Archive deal' }}</button></form>
 {% endblock %}

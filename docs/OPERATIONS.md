@@ -23,9 +23,14 @@ SHA-256 manifest.
 ```
 Restore verifies every checksum, rejects unsafe paths and runs `PRAGMA integrity_check`. Stop the app first.
 
+## Document checklists
+`src/uwhelper/crm/checklists/deal_documents.yaml` (illustrative). Bump `version` when you change items; existing
+requests keep the version they were generated with. Restart the app after editing.
+
 ## Upgrades / migrations
 Back up, pull new code, then `pip install -r requirements.lock`, `pip install -e . --no-deps` and `python -m uwhelper init`.
-Migrations apply automatically; take a backup first.
+Migrations apply automatically; take a backup first. Migration 0008 rebuilds the `deals` table with foreign-key
+enforcement paused and verifies `PRAGMA foreign_key_check` before committing; it links every file borrower to an organization.
 
 ## Policies
 Add or bump YAML files in `policies\`, then *Policies → Reload policy files* (or restart).

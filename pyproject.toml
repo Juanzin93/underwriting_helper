@@ -29,7 +29,8 @@ uwhelper = "uwhelper.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-uwhelper = ["db/migrations/*.sql", "web/templates/*.html", "web/templates/case/*.html", "web/static/*", "reports/templates/*.html"]
+uwhelper = ["db/migrations/*.sql", "web/templates/*.html", "web/templates/case/*.html", "web/templates/crm/*.html",
+            "crm/checklists/*.yaml", "web/static/*", "reports/templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

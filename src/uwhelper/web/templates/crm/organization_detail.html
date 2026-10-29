@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form, activity_form, activity_list, pager %}
 {% block title %}{{ o.name }}{% endblock %}
 {% block content %}
 <p><a href="/organizations">← Organizations</a></p>
-<h1>{{ o.name }} <span class="small muted">{{ o.org_type.replace('_',' ') }}</span></h1>
+<h1>{{ o.name }} <span class="small muted">{{ o.org_type.replace('_',' ') }}</span>{% if o.archived %} <span class="badge superseded">ARCHIVED</span>{% endif %}</h1>
 <div class="grid2"><div class="panel"><h2 style="margin-top:0">Details</h2>
 <form method="post" action="/organizations/{{ o.id }}/edit">{{ csrf() }}
 <div class="row"><div style="flex:2 1 260px"><label>Name</label><input type="text" name="name" value="{{ o.name }}" required></div><div><label>Type</label><select name="org_type">{% for t in org_types %}<option {% if t == o.org_type %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div></div>
@@ -12,5 +13,12 @@
 <label>Industry</label><input type="text" name="industry" value="{{ o.industry or '' }}"><input type="hidden" name="country" value="{{ o.country }}">
 <label>Notes</label><textarea name="notes">{{ o.notes or '' }}</textarea><p><button class="small">Save</button></p></form></div>
 <div class="panel"><h2 style="margin-top:0">People</h2><ul>{% for c in o.contacts %}<li><a href="/contacts/{{ c.id }}">{{ c.first_name }} {{ c.last_name }}</a> — {{ c.role }}{% if c.is_primary %} (primary){% endif %}</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul>
-<h2>Deals (as borrower)</h2><ul>{% for d in o.deals %}<li><a href="/deals/{{ d.id }}">{{ d.deal_number }}</a> {{ d.name }} ({{ d.status }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul></div></div>
+<h2>Deals (as borrower)</h2><ul>{% for d in o.deals %}<li><a href="/deals/{{ d.id }}">{{ d.deal_number }}</a> {{ d.name }} ({{ d.status }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul>
+<h2>Underwriting files (as borrower)</h2><ul>{% for f in files %}<li><a href="/cases/{{ f.id }}">{{ f.case_number }}</a> {{ f.title }} ({{ f.stage }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul></div></div>
+
+<div class="grid2"><div class="panel"><h2 style="margin-top:0">Tasks</h2>
+{{ task_table(tasks, '/organizations/' ~ o.id) }}{{ task_form('/organizations/' ~ o.id, organization_id=o.id) }}</div>
+<div class="panel"><h2 style="margin-top:0">Notes &amp; activity</h2>
+{{ activity_form('/organizations/' ~ o.id, organization_id=o.id) }}{{ activity_list(activities, '/organizations/' ~ o.id, organization_id=o.id) }}</div></div>
+<form method="post" action="/organizations/{{ o.id }}/{{ 'unarchive' if o.archived else 'archive' }}" class="actions">{{ csrf() }}<button class="small secondary">{{ 'Restore organization' if o.archived else 'Archive organization' }}</button></form>
 {% endblock %}

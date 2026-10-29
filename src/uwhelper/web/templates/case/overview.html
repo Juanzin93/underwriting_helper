@@ -22,6 +22,8 @@ see <a href="/cases/{{ case.id }}/review">Extraction review</a>, <a href="/cases
 <tr><th>Entity type</th><td>{{ case.borrower.entity_type or '—' }}</td></tr>
 <tr><th>Industry / NAICS</th><td>{{ case.borrower.industry or '—' }} {{ case.borrower.naics_code or '' }}</td></tr>
 <tr><th>Established</th><td>{{ case.borrower.year_established or '—' }} {{ case.borrower.state_of_formation or '' }}</td></tr>
+<tr><th>Organization</th><td>{% if borrower_org %}<a href="/organizations/{{ borrower_org.id }}">{{ borrower_org.name }}</a>{% else %}—{% endif %}</td></tr>
+<tr><th>Deal</th><td>{% if deal %}<a href="/deals/{{ deal.id }}">{{ deal.deal_number }}</a> ({{ deal.status.replace('_',' ') }}){% else %}<span class="muted">Not linked — link it from a deal page.</span>{% endif %}</td></tr>
 </table>
 <p class="actions"><a class="btn secondary small" href="/cases/{{ case.id }}/edit">Edit case &amp; borrower</a>
 <form method="post" action="/cases/{{ case.id }}/status" class="inline actions">{{ csrf() }}
@@ -32,8 +34,10 @@ see <a href="/cases/{{ case.id }}/review">Extraction review</a>, <a href="/cases
 </div>
 <div class="panel">
 <h2 style="margin-top:0">Owners &amp; guarantors</h2>
-{% if parties %}<table><tr><th>Name</th><th>Type</th><th>Ownership</th><th>Guarantee</th><th></th></tr>
+{% if parties %}<table><tr><th>Name</th><th>Type</th><th>Ownership</th><th>Guarantee</th><th>Contact</th><th></th></tr>
 {% for p in parties %}<tr><td>{{ p.name }}</td><td>{{ p.party_type }}</td><td>{{ (p.ownership_pct ~ '%') if p.ownership_pct else '—' }}</td><td>{{ p.guarantee_type }}</td>
+<td class="small">{% if p.contact_id and party_contacts.get(p.contact_id) %}<a href="/contacts/{{ p.contact_id }}">{{ party_contacts[p.contact_id].first_name }} {{ party_contacts[p.contact_id].last_name }}</a>
+{% elif p.party_type == 'individual' %}<form method="post" action="/cases/{{ case.id }}/parties/{{ p.id }}/contact" class="inline">{{ csrf() }}<select name="contact_id" aria-label="Contact for {{ p.name }}"><option value="__new__">Create from name</option>{% for c in all_contacts %}<option value="{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</option>{% endfor %}</select><button class="small secondary">Link</button></form>{% else %}—{% endif %}</td>
 <td><form method="post" action="/cases/{{ case.id }}/parties/{{ p.id }}/delete" class="inline" data-confirm="Remove this party and their personal financial facts?">{{ csrf() }}<button class="small secondary">Remove</button></form></td></tr>{% endfor %}
 </table>{% else %}<p class="muted">None recorded.</p>{% endif %}
 <details><summary>Add owner / guarantor</summary>

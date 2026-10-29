@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form, activity_form, activity_list, pager %}
 {% block title %}{{ c.first_name }} {{ c.last_name }}{% endblock %}
 {% block content %}
 <p><a href="/contacts">← Contacts</a></p>
-<h1>{{ c.first_name }} {{ c.last_name }} <span class="small muted">{{ c.contact_type.replace('_',' ') }}</span></h1>
+<h1>{{ c.first_name }} {{ c.last_name }} <span class="small muted">{{ c.contact_type.replace('_',' ') }}</span>{% if c.archived %} <span class="badge superseded">ARCHIVED</span>{% endif %}</h1>
 <div class="grid2"><div class="panel"><h2 style="margin-top:0">Details</h2>
 <form method="post" action="/contacts/{{ c.id }}/edit">{{ csrf() }}
 <div class="row"><div><label>First name</label><input type="text" name="first_name" value="{{ c.first_name }}" required></div><div><label>Last name</label><input type="text" name="last_name" value="{{ c.last_name }}" required></div></div>
@@ -15,4 +16,10 @@
 <form method="post" action="/contacts/{{ c.id }}/link" class="actions">{{ csrf() }}<select name="organization_id" aria-label="Organization">{% for o in orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select>
 <input type="text" name="role" placeholder="role"><label class="check"><input type="checkbox" name="is_primary"> primary</label><button class="small">Link</button></form>
 <h2>Deals</h2><ul>{% for d in c.deals %}<li><a href="/deals/{{ d.id }}">{{ d.deal_number }}</a> {{ d.name }} — {{ d.role }} ({{ d.status }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul></div></div>
+
+<div class="grid2"><div class="panel"><h2 style="margin-top:0">Tasks</h2>
+{{ task_table(tasks, '/contacts/' ~ c.id) }}{{ task_form('/contacts/' ~ c.id, contact_id=c.id) }}</div>
+<div class="panel"><h2 style="margin-top:0">Notes &amp; activity</h2>
+{{ activity_form('/contacts/' ~ c.id, contact_id=c.id) }}{{ activity_list(activities, '/contacts/' ~ c.id, contact_id=c.id) }}</div></div>
+<form method="post" action="/contacts/{{ c.id }}/{{ 'unarchive' if c.archived else 'archive' }}" class="actions">{{ csrf() }}<button class="small secondary">{{ 'Restore contact' if c.archived else 'Archive contact' }}</button></form>
 {% endblock %}

@@ -3,8 +3,8 @@
 * All writes run in a transaction and record an audit event (changed field names with before/after values;
   free-text notes are recorded only as "changed").
 * Deals follow an explicit status machine with append-only history (``deal_status_history``).
-  Milestone 1 enforces valid transitions, reasons and human authorization for APPROVED / FUNDED / DECLINED;
-  stage gates (submissions, offers, conditions) arrive with the brokerage milestone.
+  Valid transitions, reasons and human authorization for APPROVED / FUNDED / DECLINED are enforced; consistency
+  with a linked underwriting file is handled by ``uwhelper.crm.pipeline``.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from decimal import Decimal
 from typing import Any, BinaryIO
 
 from uwhelper.config import Settings
+from uwhelper.core.identity import current_actor
+from uwhelper.crm import pipeline
 from uwhelper.crm.models import (
     PRODUCT_TYPES,
     ContactIn,
@@ -34,18 +36,20 @@ from uwhelper.repo.cases import NotFound, ValidationFailure
 MAX_PAGE = 200
 TEXT_FIELDS = {"notes", "collateral_summary", "loan_purpose"}
 
-DEAL_STATUSES = ("INTAKE", "UNDERWRITING", "STRUCTURING", "LENDER_SUBMISSION", "APPROVED", "DUE_DILIGENCE",
-                 "CLOSING", "FUNDED", "DECLINED", "WITHDRAWN", "ON_HOLD", "CANCELLED")
+DEAL_STATUSES = ("INTAKE", "UNDERWRITING", "CREDIT_REVIEW", "STRUCTURING", "LENDER_SUBMISSION", "APPROVED",
+                 "DUE_DILIGENCE", "CLOSING", "FUNDED", "SERVICING", "DECLINED", "WITHDRAWN", "ON_HOLD", "CANCELLED")
 _EXITS = ["ON_HOLD", "WITHDRAWN", "CANCELLED"]
 DEAL_TRANSITIONS: dict[str, list[str]] = {
     "INTAKE": ["UNDERWRITING", "DECLINED", *_EXITS],
-    "UNDERWRITING": ["STRUCTURING", "INTAKE", "DECLINED", *_EXITS],
-    "STRUCTURING": ["LENDER_SUBMISSION", "UNDERWRITING", "DECLINED", *_EXITS],
+    "UNDERWRITING": ["CREDIT_REVIEW", "STRUCTURING", "INTAKE", "DECLINED", *_EXITS],
+    "CREDIT_REVIEW": ["STRUCTURING", "UNDERWRITING", "DECLINED", *_EXITS],
+    "STRUCTURING": ["LENDER_SUBMISSION", "CREDIT_REVIEW", "UNDERWRITING", "DECLINED", *_EXITS],
     "LENDER_SUBMISSION": ["APPROVED", "STRUCTURING", "DECLINED", *_EXITS],
     "APPROVED": ["DUE_DILIGENCE", "LENDER_SUBMISSION", *_EXITS],
     "DUE_DILIGENCE": ["CLOSING", "APPROVED", *_EXITS],
     "CLOSING": ["FUNDED", "DUE_DILIGENCE", *_EXITS],
-    "FUNDED": [],
+    "FUNDED": ["SERVICING"],
+    "SERVICING": [],
     "ON_HOLD": ["RESUME", "WITHDRAWN", "CANCELLED"],
     "DECLINED": ["INTAKE"],
     "WITHDRAWN": ["INTAKE"],
@@ -78,7 +82,7 @@ def _unique_violation(exc: sqlite3.IntegrityError, what: str) -> ValidationFailu
 
 
 # ------------------------------------------------------------------------------------------ organizations
-def create_organization(conn: sqlite3.Connection, o: OrganizationIn) -> str:
+def create_organization(conn: sqlite3.Connection, o: OrganizationIn, *, case_id: str | None = None) -> str:
     oid, now = new_id(), utcnow()
     data = o.model_dump()
     try:
@@ -86,8 +90,8 @@ def create_organization(conn: sqlite3.Connection, o: OrganizationIn) -> str:
             cols = ", ".join(data)
             conn.execute(f"INSERT INTO organizations(id, {cols}, created_at, updated_at) "
                          f"VALUES (?, {', '.join('?' * len(data))}, ?, ?)", (oid, *data.values(), now, now))
-            audit.record(conn, "organization_created", "organization", oid, None,
-                         {"org_type": o.org_type, "name": o.name})
+            audit.record(conn, "organization_created", "organization", oid, case_id,
+                         {"org_type": o.org_type, "name": o.name, "auto_created_for_file": bool(case_id)})
     except sqlite3.IntegrityError as exc:
         raise _unique_violation(exc, "organization (same name and type)") from None
     return oid
@@ -260,8 +264,8 @@ def create_deal(conn: sqlite3.Connection, d: DealIn) -> str:
             (did, number, d.name, d.deal_type, d.product_type, d.loan_purpose, dstr(d.requested_amount),
              d.collateral_summary, d.borrower_organization_id, d.primary_contact_id, d.referral_source_contact_id,
              d.target_close_date.isoformat() if d.target_close_date else None, d.notes, now, now, now))
-        conn.execute("INSERT INTO deal_status_history(deal_id, from_status, to_status, reason, occurred_at) "
-                     "VALUES (?, NULL, 'INTAKE', 'Deal created', ?)", (did, now))
+        conn.execute("INSERT INTO deal_status_history(deal_id, from_status, to_status, reason, actor, occurred_at) "
+                     "VALUES (?, NULL, 'INTAKE', 'Deal created', ?, ?)", (did, current_actor(), now))
         for cid, role in ((d.primary_contact_id, "borrower"), (d.referral_source_contact_id, "referral_partner")):
             if cid:
                 conn.execute("INSERT OR IGNORE INTO deal_contacts(deal_id, contact_id, role, created_at) VALUES (?,?,?,?)",
@@ -291,7 +295,8 @@ def get_deal(conn: sqlite3.Connection, deal_id: str) -> dict[str, Any]:
            WHERE dd.deal_id=? ORDER BY dd.added_at""", (deal_id,))]
     deal["history"] = [dict(r) for r in conn.execute(
         "SELECT * FROM deal_status_history WHERE deal_id=? ORDER BY id", (deal_id,))]
-    deal["allowed_transitions"] = [t for t in DEAL_TRANSITIONS.get(deal["status"], [])]
+    deal["allowed_transitions"] = list(DEAL_TRANSITIONS.get(deal["status"], []))
+    deal["alignment_notes"] = pipeline.alignment_notes(deal)
     return deal
 
 
@@ -323,7 +328,7 @@ def list_deals(conn: sqlite3.Connection, *, status: str | None = None, deal_type
 
 def update_deal(conn: sqlite3.Connection, deal_id: str, p: DealPatch) -> dict[str, list]:
     before = get_deal(conn, deal_id)
-    if before["status"] == "FUNDED":
+    if before["status"] in pipeline.DEAL_FUNDED:
         raise ValidationFailure("Funded deals are closed for edits; record changes in servicing.")
     patch = p.model_dump(exclude_unset=True)
     if patch.get("name", "x") is None:
@@ -362,14 +367,18 @@ def transition_deal(conn: sqlite3.Connection, deal_id: str, s: DealStatusIn) -> 
         raise ValidationFailure("Add a borrower organization or primary contact before underwriting.")
     if target == "UNDERWRITING" and not deal["requested_amount"]:
         raise ValidationFailure("Enter the requested amount before underwriting.")
-    now = utcnow()
+    conflict = pipeline.deal_transition_conflict(conn, deal, target)
+    if conflict:
+        raise ValidationFailure(conflict)
+    now, actor = utcnow(), current_actor()
     with Database.transaction(conn):
         conn.execute("UPDATE deals SET status=?, status_changed_at=?, hold_return_status=?, updated_at=? WHERE id=?",
                      (target, now, current if target == "ON_HOLD" else None, now, deal_id))
-        conn.execute("INSERT INTO deal_status_history(deal_id, from_status, to_status, reason, authorized_by, occurred_at) "
-                     "VALUES (?,?,?,?,?,?)", (deal_id, current, target, s.reason, s.authorized_by, now))
+        conn.execute("INSERT INTO deal_status_history(deal_id, from_status, to_status, reason, authorized_by, actor, "
+                     "occurred_at) VALUES (?,?,?,?,?,?,?)", (deal_id, current, target, s.reason, s.authorized_by, actor, now))
         audit.record(conn, "deal_status_changed", "deal", deal_id, deal.get("loan_case_id"),
                      {"from": current, "to": target, "reason": s.reason, "authorized_by": s.authorized_by})
+        pipeline.sync_case_from_deal(conn, deal, target, s.reason)
     return target
 
 
@@ -407,6 +416,9 @@ def attach_document(conn: sqlite3.Connection, settings: Settings, deal_id: str, 
     with Database.transaction(conn):
         cur = conn.execute("INSERT OR IGNORE INTO deal_documents(deal_id, document_id, doc_type, added_at) VALUES (?,?,?,?)",
                            (deal_id, res["document_id"], doc_type, utcnow()))
+        if deal["loan_case_id"]:  # keep the linked underwriting file's document list complete
+            conn.execute("INSERT OR IGNORE INTO case_documents(case_id, document_id, doc_type, added_at) VALUES (?,?,?,?)",
+                         (deal["loan_case_id"], res["document_id"], doc_type, utcnow()))
         audit.record(conn, "deal_document_attached", "deal", deal_id, deal.get("loan_case_id"),
                      {"document_id": res["document_id"], "doc_type": doc_type, "duplicate": res["duplicate"],
                       "already_attached": not cur.rowcount})
@@ -437,14 +449,91 @@ def start_underwriting_file(conn: sqlite3.Connection, deal_id: str, loan_type: s
     with Database.transaction(conn):
         case_id = create_case(conn, CaseIn(title=f"{deal['deal_number']} {deal['name']}"[:200], loan_type=lt,
                                            notes=f"Created from deal {deal['deal_number']}."),
-                              BorrowerIn(legal_name=deal["borrower_name"]), terms)
+                              BorrowerIn(legal_name=deal["borrower_name"]), terms,
+                              borrower_organization_id=deal["borrower_organization_id"])
         conn.execute("UPDATE deals SET loan_case_id=?, updated_at=? WHERE id=?", (case_id, utcnow(), deal_id))
-        for d in deal["documents"]:
-            conn.execute("INSERT OR IGNORE INTO case_documents(case_id, document_id, doc_type, added_at) VALUES (?,?,?,?)",
-                         (case_id, d["id"], d["doc_type"], utcnow()))
+        _copy_documents_to_case(conn, deal, case_id)
+        guarantors = 0
+        for c in deal["contacts"]:
+            if c["role"] == "guarantor":
+                conn.execute("""INSERT INTO parties(id, case_id, name, party_type, is_guarantor, guarantee_type, contact_id,
+                                   created_at, updated_at) VALUES (?,?,?,'individual',1,'unlimited',?,?,?)""",
+                             (new_id(), case_id, f"{c['first_name']} {c['last_name']}"[:200], c["id"], utcnow(), utcnow()))
+                guarantors += 1
         audit.record(conn, "deal_underwriting_file_created", "deal", deal_id, case_id,
-                     {"loan_type": lt, "documents_linked": len(deal["documents"])})
+                     {"loan_type": lt, "documents_linked": len(deal["documents"]), "guarantors_copied": guarantors})
     return case_id
+
+
+def _copy_documents_to_case(conn: sqlite3.Connection, deal: dict[str, Any], case_id: str) -> None:
+    for d in deal["documents"]:
+        conn.execute("INSERT OR IGNORE INTO case_documents(case_id, document_id, doc_type, added_at) VALUES (?,?,?,?)",
+                     (case_id, d["id"], d["doc_type"], utcnow()))
+
+
+def link_underwriting_file(conn: sqlite3.Connection, deal_id: str, case_id: str) -> None:
+    """Link an existing underwriting file (created before the deal) to the deal; copies deal documents into it."""
+    from uwhelper.repo.cases import get_case
+
+    deal = get_deal(conn, deal_id)
+    if deal["loan_case_id"]:
+        raise ValidationFailure("This deal already has an underwriting file.")
+    case = get_case(conn, case_id)
+    other = pipeline.deal_for_case(conn, case_id)
+    if other:
+        raise ValidationFailure(f"That underwriting file is already linked to deal {other['deal_number']}.")
+    if deal["status"] in pipeline.DEAL_LOST and case["stage"] in pipeline.CASE_FUNDED:
+        raise ValidationFailure("A funded underwriting file cannot be linked to a declined/withdrawn/cancelled deal.")
+    with Database.transaction(conn):
+        conn.execute("UPDATE deals SET loan_case_id=?, updated_at=? WHERE id=?", (case_id, utcnow(), deal_id))
+        _copy_documents_to_case(conn, deal, case_id)
+        audit.record(conn, "deal_underwriting_file_linked", "deal", deal_id, case_id,
+                     {"case_number": case["case_number"], "case_stage": case["stage"]})
+
+
+def unlinked_underwriting_files(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return [dict(r) for r in conn.execute(
+        """SELECT c.id, c.case_number, c.title, c.stage FROM loan_cases c
+           WHERE NOT EXISTS (SELECT 1 FROM deals d WHERE d.loan_case_id=c.id) ORDER BY c.created_at DESC LIMIT 200""")]
+
+
+# ------------------------------------------------------------------------------------------ borrower entities
+def ensure_borrower_organization(conn: sqlite3.Connection, legal_name: str, industry: str | None = None,
+                                 case_id: str | None = None) -> str:
+    """Find the borrower organization with this name (case-insensitive) or create it. Returns its id.
+
+    When created for an underwriting file, the audit event carries that file's id, so purging the file removes it
+    (see ``repo.cases.purge_case``)."""
+    name = (legal_name or "").strip()
+    if not name:
+        raise ValidationFailure("Borrower legal name is required.")
+    row = conn.execute("SELECT id FROM organizations WHERE org_type='borrower_business' AND name=? COLLATE NOCASE",
+                       (name,)).fetchone()
+    if row:
+        return row["id"]
+    return create_organization(conn, OrganizationIn(name=name[:200], org_type="borrower_business",
+                                                    industry=(industry or None) and industry[:120]), case_id=case_id)
+
+
+def link_party_contact(conn: sqlite3.Connection, case_id: str, party_id: str, contact_id: str | None = None,
+                       create: bool = False) -> str:
+    """Link an owner/guarantor on an underwriting file to a contact (existing, or created from the party name)."""
+    party = conn.execute("SELECT * FROM parties WHERE id=? AND case_id=?", (party_id, case_id)).fetchone()
+    if not party:
+        raise NotFound("Owner/guarantor not found")
+    if create:
+        if party["party_type"] != "individual":
+            raise ValidationFailure("Only individuals can become contacts; link entities to organizations instead.")
+        first, _, last = party["name"].strip().rpartition(" ")
+        contact_id = create_contact(conn, ContactIn(first_name=(first or last)[:100], last_name=last[:100] if first else "-",
+                                                    contact_type="guarantor" if party["is_guarantor"] else "borrower"))
+    if not contact_id:
+        raise ValidationFailure("Choose a contact or create one.")
+    get_contact(conn, contact_id)
+    with Database.transaction(conn):
+        conn.execute("UPDATE parties SET contact_id=?, updated_at=? WHERE id=?", (contact_id, utcnow(), party_id))
+        audit.record(conn, "party_linked_to_contact", "party", party_id, case_id, {"contact_id": contact_id})
+    return contact_id
 
 
 def pipeline_summary(conn: sqlite3.Connection) -> list[dict[str, Any]]:

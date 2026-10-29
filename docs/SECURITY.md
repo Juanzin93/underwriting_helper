@@ -22,6 +22,9 @@ the data directory and talk to `127.0.0.1`.
 | Telemetry in dependencies | FastAPI's built-in OpenTelemetry support disabled (`telemetry` off, `OTEL_SDK_DISABLED=true`); no exporter installed; test asserts it |
 | Integrations | Registry with two switches (`UWH_EXTERNAL_INTEGRATIONS_ALLOWED` + per-name `UWH_ENABLED_INTEGRATIONS`), share-confirmation helper; none implemented |
 | API | JSON API needs `X-CSRF-Token`; no CORS headers; errors carry a request ID but never input values |
+| Notes & imports | Note/call text stays in the database only (audit events hold ids, never note text; nothing in the log file); CSV imports are read in memory, not stored |
+| Attribution | Actor = Windows account name or `UWH_ACTOR_NAME`; this is attribution, not authentication |
+| Redirects | Form "return to" targets must be local paths (no open redirects) |
 | Static files | Settings refuse a data/DB/document folder inside `web/static` |
 | Tests | Autouse guard blocks non-loopback sockets and DNS during tests |
 | Git | `.env` ignored; data dir outside repo by default; `.gitignore` excludes PDFs/images/DBs/backups; pre-commit hook blocks them |

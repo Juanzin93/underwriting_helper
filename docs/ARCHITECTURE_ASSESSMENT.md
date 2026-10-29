@@ -33,10 +33,10 @@ triggers; the LLM never authors a number that is used without human verification
 
 | Risk | Impact | Mitigation / plan |
 |---|---|---|
-| **No authentication; "authorized by" is a typed name** | Fine for one person; not acceptable once staff share an install | M2: record the Windows user as actor; later local accounts before any multi-user use |
+| **No authentication; "authorized by" is a typed name** | Fine for one person; not acceptable once staff share an install | M2 records the Windows account (or `UWH_ACTOR_NAME`) as actor — attribution, not authentication. Local accounts are required before any multi-user use |
 | **PyMuPDF is AGPL-3.0** | Using it privately is fine; distributing the app to clients/partners as part of a brokerage business triggers AGPL obligations | Decide before distribution: keep source available, buy an Artifex licence, or swap to pypdfium2 (Apache/BSD) behind `documents/pdf.py` |
-| Two pipelines: `deals.status` (brokerage) and `loan_cases.stage` (underwriting lifecycle) | Users could see contradictory states | M2.1 defines ownership and sync rules (below) |
-| Borrower duplicated in `borrowers` (per case) and `organizations` | Data drift | M2.2 links/backfills case borrowers to organizations |
+| Two pipelines: `deals.status` (brokerage) and `loan_cases.stage` (underwriting lifecycle) | Users could see contradictory states | **Resolved in M2**: recorded sync rules and guards (docs/LIFECYCLE.md) |
+| Borrower duplicated in `borrowers` (per case) and `organizations` | Data drift | **Resolved in M2**: every file borrower links to an organization (backfilled) |
 | No encryption at rest | Disk theft exposes borrower data | BitLocker/VeraCrypt (docs/SECURITY.md); `UWH_DB_FILE` now allows an encrypted volume |
 | SQLite single writer | Fine for 1–3 local users; not for a team server | Keep; revisit only with real multi-user demand |
 | Some HTML routes still run SQL directly | Harder to test/reuse | Move into services as each area is touched (no big-bang refactor) |
@@ -52,12 +52,12 @@ Target boundaries are **packages inside one process**, not services.
 |---|---|---|
 | core | `core/` (errors, request IDs), `config.py`, `bootstrap.py` | New in M1 |
 | db | `db/` | Connection, migrations |
-| crm | `crm/` | New in M1: organizations, contacts, deals |
-| borrowers | `repo/cases.py` (borrowers/parties) | M2.2 moves into `crm`/`borrowers` |
+| crm | `crm/` | M1: organizations, contacts, deals. M2: `pipeline` (sync), `tasks`, `requests` (checklists), `activities`, `importer` |
+| borrowers | `repo/cases.py` (borrowers/parties) linked to `crm` organizations/contacts | Linked in M2 |
 | documents | `documents/` | `ingest_file` now shared by cases and deals |
 | underwriting/common | `analysis/`, `metrics/finance.py`, `policy/` | |
 | underwriting/business | `modules/commercial.py`, `metrics/commercial.py` | |
-| underwriting/cre | — | M3 (NOI, cap rate, debt yield, rent roll) |
+| underwriting/cre | property metrics inside `metrics/commercial.py` (EGI, NOI, property DSCR, debt yield) | M3: own module with rent roll, cap rate, stressed DSCR |
 | lenders, matching | — | M4 |
 | structuring | `structuring.py`, `metrics/structuring.py` | |
 | origination | `workflow/` (lifecycle, decisions, conditions, closing) | |
