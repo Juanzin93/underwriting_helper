@@ -60,7 +60,7 @@ Target boundaries are **packages inside one process**, not services.
 | underwriting/cre | `cre/` (rent rolls, T-12) and `metrics/cre.py`; EGI/NOI/property DSCR/debt yield in `metrics/commercial.py` | M3. Kept as a loan type of the commercial module (see ROADMAP design decision) |
 | lenders, matching | `lenders/` (service, models, matching, importer) | M4 |
 | structuring | `structuring.py`, `metrics/structuring.py` | |
-| origination | `workflow/` (lifecycle, decisions, conditions, closing) | |
+| origination | `workflow/` (file lifecycle, decisions, conditions, closing); `origination/` (deal conditions, due diligence, closing, funding, gates) | M6 for deals |
 | brokerage | `brokerage/` (packages, submissions & offers, fees & commission ledger); deal pipeline in `crm/` | M5 |
 | servicing | `servicing/` | |
 | direct_lending | — | M8 |

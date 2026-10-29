@@ -143,3 +143,20 @@ Known limitations added in M5:
 * Fee agreements support flat and percentage bases only (no tiered or capped fees); the disclosure is a single text.
 * The deal's FUNDED status is still set by a person on the deal (or synced from the file's funding); the fuller
   deal-level closing and funding confirmation is planned for Milestone 6.
+
+## Platform Milestone 6 — lender approval to funding on deals ✅
+
+Latest test run: **342 passed, 2 skipped** (`python -m pytest -q`; also with `-W error::ResourceWarning`). New tests:
+`tests/unit/test_m6_closing.py` (10). Earlier tests that set deals to FUNDED by hand now use the funding confirmation
+(`tests/deal_helpers.py`), and deal moves to DUE_DILIGENCE/CLOSING without the new prerequisites give an override reason.
+
+**Behaviour changes:** a deal can no longer be set to FUNDED with a plain status change (UI or
+`POST /api/v1/deals/{id}/status`) — use the funding confirmation; DUE_DILIGENCE and CLOSING are gated (see LIFECYCLE.md).
+
+Also verified by hand: a database created by the Milestone 5 release upgraded to schema 12 with integrity ok, audit
+chain intact and all 5 runs reproducing; the closing page checked in Chromium at desktop and 390 px width.
+
+Known limitations added in M6:
+* Deal conditions and due diligence are separate from the underwriting file's own policy conditions (the file keeps
+  its lifecycle); a deal with a linked file shows both in their own places.
+* Funding confirmation records what happened; the app moves no money and drafts no loan documents.

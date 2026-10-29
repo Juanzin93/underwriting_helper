@@ -169,8 +169,9 @@ class DealStatusIn(BaseModel):
     reason: str = Field(min_length=10, max_length=2000)
     authorized_by: str | None = Field(default=None, max_length=120)
     confirm: bool = False
+    override_reason: str | None = Field(default=None, max_length=2000)
 
-    _b = field_validator("authorized_by", mode="before")(_blank)
+    _b = field_validator("authorized_by", "override_reason", mode="before")(_blank)
 
 
 class DealContactIn(BaseModel):

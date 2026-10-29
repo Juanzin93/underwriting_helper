@@ -58,6 +58,9 @@ def api(app, client):
         def patch(self, url, json=None):
             return client.patch(url, json=json, headers={"X-CSRF-Token": token})
 
+        def put(self, url, json=None):
+            return client.put(url, json=json, headers={"X-CSRF-Token": token})
+
         def delete(self, url):
             return client.delete(url, headers={"X-CSRF-Token": token})
     return Api()
@@ -310,10 +313,22 @@ def test_deal_workflow_and_status_rules(api):
     api.post(f"/api/v1/deals/{did}/status", {"to_status": "ON_HOLD", "reason": "Borrower travelling"})
     r = api.post(f"/api/v1/deals/{did}/status", {"to_status": "RESUME", "reason": "Borrower back in town"})
     assert r.json().get("status") == "APPROVED", r.text
+    r = api.post(f"/api/v1/deals/{did}/status", {"to_status": "DUE_DILIGENCE", "reason": "Moving to diligence"})
+    assert r.status_code == 422 and "accepted lender offer" in r.json()["error"]["message"]  # M6 gate (soft)
     for to in ("DUE_DILIGENCE", "CLOSING"):
-        api.post(f"/api/v1/deals/{did}/status", {"to_status": to, "reason": f"Moving to {to}"})
-    api.post(f"/api/v1/deals/{did}/status", {"to_status": "FUNDED", "reason": "Lender confirmed funding",
-                                             "authorized_by": "Pat Broker", "confirm": True})
+        assert api.post(f"/api/v1/deals/{did}/status", {
+            "to_status": to, "reason": f"Moving to {to}",
+            "override_reason": "Offer accepted by phone; terms to be recorded later"}).status_code == 200
+    # Since M6 a deal becomes FUNDED only through the funding confirmation.
+    r = api.post(f"/api/v1/deals/{did}/status", {"to_status": "FUNDED", "reason": "Lender confirmed funding",
+                                                 "authorized_by": "Pat Broker", "confirm": True})
+    assert r.status_code == 422 and "Confirm funding" in r.json()["error"]["message"]
+    assert api.put(f"/api/v1/deals/{did}/closing/record", {"closing_date": "2026-01-15"}).status_code == 200
+    r = api.post(f"/api/v1/deals/{did}/funding", {"funded_amount": "480000", "funding_date": "2026-01-15",
+                                                  "confirmed_by": "Pat Broker",
+                                                  "confirmation_text": "I confirm this loan was funded",
+                                                  "override_reason": "Offer accepted by phone; terms to be recorded"})
+    assert r.status_code == 201, r.text
     d = api.get(f"/api/v1/deals/{did}").json()
     assert [h["to_status"] for h in d["history"]] == ["INTAKE", "UNDERWRITING", "STRUCTURING", "LENDER_SUBMISSION",
                                                       "APPROVED", "ON_HOLD", "APPROVED", "DUE_DILIGENCE", "CLOSING",

@@ -41,6 +41,13 @@ from uwhelper.crm.models import (
 )
 from uwhelper.documents.storage import UploadRejected
 from uwhelper.lenders.models import CriteriaVersionIn, ProgramIn, ProgramPatch
+from uwhelper.origination.closing import ClosingIn, FundingConfirmIn
+from uwhelper.origination.conditions import (
+    ConditionIn,
+    ConditionUpdateIn,
+    DDItemIn,
+    DDUpdateIn,
+)
 from uwhelper.repo.cases import ValidationFailure
 from uwhelper.web.app import get_db
 
@@ -665,6 +672,78 @@ def commissions(request: Request) -> JSONResponse:
 
     with get_db(request).session() as conn:
         return _json(F.commissions_report(conn))
+
+
+# ---------------------------------------------------------------------------------------- closing & funding
+@router.get("/deals/{deal_id}/closing")
+def closing_get(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.web.routes.closing import closing_context
+
+    with get_db(request).session() as conn:
+        ctx = closing_context(conn, deal_id)
+        ctx.pop("vendors", None)
+        ctx["deal"] = {k: ctx["deal"][k] for k in ("id", "deal_number", "name", "status")}
+        return _json(ctx)
+
+
+@router.post("/deals/{deal_id}/conditions")
+def condition_create(request: Request, deal_id: str, body: ConditionIn) -> JSONResponse:
+    from uwhelper.origination import conditions as C
+
+    with get_db(request).session() as conn:
+        return _json(C.get_condition(conn, deal_id, C.add_condition(conn, deal_id, body)), 201)
+
+
+@router.post("/deals/{deal_id}/conditions/{condition_id}")
+def condition_update(request: Request, deal_id: str, condition_id: str, body: ConditionUpdateIn) -> JSONResponse:
+    from uwhelper.origination import conditions as C
+
+    with get_db(request).session() as conn:
+        C.update_condition(conn, deal_id, condition_id, body)
+        return _json(C.get_condition(conn, deal_id, condition_id))
+
+
+@router.post("/deals/{deal_id}/diligence")
+def dd_create(request: Request, deal_id: str, body: DDItemIn) -> JSONResponse:
+    from uwhelper.origination import conditions as C
+
+    with get_db(request).session() as conn:
+        return _json(C.get_dd_item(conn, deal_id, C.add_dd_item(conn, deal_id, body)), 201)
+
+
+@router.post("/deals/{deal_id}/diligence/{item_id}")
+def dd_update(request: Request, deal_id: str, item_id: str, body: DDUpdateIn) -> JSONResponse:
+    from uwhelper.origination import conditions as C
+
+    with get_db(request).session() as conn:
+        C.update_dd_item(conn, deal_id, item_id, body)
+        return _json(C.get_dd_item(conn, deal_id, item_id))
+
+
+@router.put("/deals/{deal_id}/closing/record")
+def closing_record(request: Request, deal_id: str, body: ClosingIn) -> JSONResponse:
+    from uwhelper.origination import closing as CL
+
+    with get_db(request).session() as conn:
+        CL.save_closing(conn, deal_id, body)
+        return _json(CL.get_closing(conn, deal_id))
+
+
+@router.post("/deals/{deal_id}/funding")
+def funding_confirm(request: Request, deal_id: str, body: FundingConfirmIn) -> JSONResponse:
+    from uwhelper.origination import closing as CL
+
+    with get_db(request).session() as conn:
+        CL.confirm_funding(conn, deal_id, body)
+        return _json(CL.get_funding(conn, deal_id), 201)
+
+
+@router.get("/deals/{deal_id}/readiness")
+def deal_readiness(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.origination.closing import readiness
+
+    with get_db(request).session() as conn:
+        return _json({"items": readiness(conn, deal_id)})
 
 
 @router.get("/pipeline")

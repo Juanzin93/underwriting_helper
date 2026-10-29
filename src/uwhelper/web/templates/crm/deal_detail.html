@@ -9,16 +9,19 @@
 <span class="small muted">{{ 'CRE' if deal.deal_type == 'cre' else 'Small business' }} · {{ deal.product_type.replace('_',' ') }} · requested {{ deal.requested_amount|money }} · since {{ deal.status_changed_at[:16].replace('T',' ') }}</span>
 {% if deal.loan_case_id %}<span class="small">Underwriting file: <a href="/cases/{{ deal.loan_case_id }}">{{ deal.case_number }}</a> (stage {{ deal.case_stage }})</span>{% endif %}</div>
 {% for n in deal.alignment_notes %}<div class="warning-box">{{ n }}</div>{% endfor %}
+{% if deal.status in ('APPROVED','DUE_DILIGENCE','CLOSING','FUNDED','SERVICING') %}<p><a class="btn secondary small" href="/deals/{{ deal.id }}/closing">Conditions, due diligence, closing &amp; funding →</a>{% for r in readiness %} <span class="small">→ {{ r.to_status.replace('_',' ') }}: {% if r.blockers %}<span class="badge {{ 'rejected' if r.blockers|selectattr('hard')|list else 'candidate' }}">{{ r.blockers|length }} open item(s)</span>{% else %}<span class="badge verified">ready</span>{% endif %}</span>{% endfor %}</p>{% endif %}
 
 <div class="grid2">
 <div class="panel"><h2 style="margin-top:0">Change status</h2>
 {% if deal.allowed_transitions %}
 <form method="post" action="/deals/{{ deal.id }}/status" data-confirm="Change the deal status?">{{ csrf() }}
-<div class="row"><div><label>To</label><select name="to_status">{% for t in deal.allowed_transitions %}<option value="{{ t }}">{{ 'Resume' if t == 'RESUME' else t.replace('_',' ') }}</option>{% endfor %}</select></div>
+<div class="row"><div><label>To</label><select name="to_status">{% for t in deal.allowed_transitions if t != 'FUNDED' %}<option value="{{ t }}">{{ 'Resume' if t == 'RESUME' else t.replace('_',' ') }}</option>{% endfor %}</select></div>
 <div style="flex:2 1 260px"><label>Reason (≥ 10 characters) *</label><input type="text" name="reason" required minlength="10"></div></div>
-<div class="row"><div><label>Authorized by (required for {{ needs_auth|sort|join(', ') }})</label><input type="text" name="authorized_by"></div></div>
+<div class="row"><div><label>Authorized by (required for {{ needs_auth|sort|join(', ') }})</label><input type="text" name="authorized_by"></div>
+<div style="flex:2 1 260px"><label>Override reason (only if the step has open items, ≥ 20 characters)</label><input type="text" name="override_reason"></div></div>
 <label class="check"><input type="checkbox" name="confirm"> This reflects a human decision recorded outside the software (needed for approval, funding, decline)</label>
 <p><button class="small">Change status</button></p></form>
+{% if 'FUNDED' in deal.allowed_transitions %}<p class="small">To record funding, use <a href="/deals/{{ deal.id }}/closing#funding">Closing &amp; funding → Confirm funding</a>.</p>{% endif %}
 {% else %}<p class="muted">No further status changes ({{ deal.status.lower() }}).</p>{% endif %}
 {% if not deal.loan_case_id %}<form method="post" action="/deals/{{ deal.id }}/underwriting-file" class="inline" data-confirm="Create an underwriting file from this deal?">{{ csrf() }}<button class="small secondary">Start underwriting file</button></form>
 <p class="small muted">Creates a linked underwriting case (borrower, requested amount, guarantors and deal documents are copied).</p>

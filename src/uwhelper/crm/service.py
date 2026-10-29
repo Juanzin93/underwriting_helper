@@ -367,19 +367,38 @@ def transition_deal(conn: sqlite3.Connection, deal_id: str, s: DealStatusIn) -> 
         raise ValidationFailure("Add a borrower organization or primary contact before underwriting.")
     if target == "UNDERWRITING" and not deal["requested_amount"]:
         raise ValidationFailure("Enter the requested amount before underwriting.")
+    if target == "FUNDED":
+        raise ValidationFailure("A deal becomes FUNDED through Closing & funding → Confirm funding (amount, date, who), "
+                                "or automatically when its underwriting file is funded.")
     conflict = pipeline.deal_transition_conflict(conn, deal, target)
     if conflict:
         raise ValidationFailure(conflict)
+    reason, overridden = s.reason, []
+    if s.to_status != "RESUME":
+        from uwhelper.origination.closing import GATED, check_gate
+
+        if target in GATED:
+            overridden = check_gate(conn, deal, target, s.override_reason)
+            if overridden:
+                reason = f"{s.reason} Override: {s.override_reason.strip()}"[:2000]  # type: ignore[union-attr]
+    write_transition(conn, deal, target, reason, s.authorized_by, overridden=[b.code for b in overridden])
+    return target
+
+
+def write_transition(conn: sqlite3.Connection, deal: dict[str, Any], target: str, reason: str,
+                     authorized_by: str | None, *, overridden: list[str] | None = None) -> None:
+    """Persist a deal status change (history, audit, file sync). Callers have done all checks."""
+    current, deal_id = deal["status"], deal["id"]
     now, actor = utcnow(), current_actor()
     with Database.transaction(conn):
         conn.execute("UPDATE deals SET status=?, status_changed_at=?, hold_return_status=?, updated_at=? WHERE id=?",
                      (target, now, current if target == "ON_HOLD" else None, now, deal_id))
         conn.execute("INSERT INTO deal_status_history(deal_id, from_status, to_status, reason, authorized_by, actor, "
-                     "occurred_at) VALUES (?,?,?,?,?,?,?)", (deal_id, current, target, s.reason, s.authorized_by, actor, now))
+                     "occurred_at) VALUES (?,?,?,?,?,?,?)", (deal_id, current, target, reason, authorized_by, actor, now))
         audit.record(conn, "deal_status_changed", "deal", deal_id, deal.get("loan_case_id"),
-                     {"from": current, "to": target, "reason": s.reason, "authorized_by": s.authorized_by})
-        pipeline.sync_case_from_deal(conn, deal, target, s.reason)
-    return target
+                     {"from": current, "to": target, "reason": reason, "authorized_by": authorized_by,
+                      "overridden": overridden or []})
+        pipeline.sync_case_from_deal(conn, deal, target, reason)
 
 
 def add_deal_contact(conn: sqlite3.Connection, deal_id: str, dc: DealContactIn) -> None:

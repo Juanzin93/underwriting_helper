@@ -31,6 +31,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 uwhelper = ["db/migrations/*.sql", "web/templates/*.html", "web/templates/case/*.html", "web/templates/crm/*.html", "web/templates/lenders/*.html",
             "web/templates/brokerage/*.html",
+            "web/templates/origination/*.html",
             "crm/checklists/*.yaml", "web/static/*", "reports/templates/*.html"]
 
 [tool.pytest.ini_options]

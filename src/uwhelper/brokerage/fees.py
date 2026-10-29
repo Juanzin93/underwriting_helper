@@ -10,7 +10,7 @@ Agreements are never edited: void one (with a reason) and add a replacement.
 
 Ledger (append-only): ``expected_in`` / ``received`` for money owed to the broker, ``expected_out`` / ``paid_out`` for
 money the broker owes. A mistake is fixed with a reversing entry. Expected entries are generated from the
-agreements once the deal is funded, using the funded amount from (in order): the linked file's confirmed funding,
+agreements once the deal is funded, using the funded amount from (in order): the deal's funding confirmation, the linked file's confirmed funding,
 the accepted offer, or the requested amount (labelled an estimate). All amounts are Decimal, rounded half-up to
 cents per line; a referral split on gross compensation uses the sum of the rounded broker lines.
 """
@@ -164,6 +164,9 @@ def funded_amount(conn: sqlite3.Connection, deal_id: str) -> tuple[Decimal | Non
     deal = conn.execute("SELECT loan_case_id, requested_amount FROM deals WHERE id=?", (deal_id,)).fetchone()
     if not deal:
         raise NotFound("Deal not found")
+    df = conn.execute("SELECT funded_amount, confirmed_by FROM deal_fundings WHERE deal_id=?", (deal_id,)).fetchone()
+    if df:
+        return Decimal(df["funded_amount"]), f"funding confirmation on the deal by {df['confirmed_by']}"
     if deal["loan_case_id"]:
         f = conn.execute("SELECT funded_amount FROM fundings WHERE case_id=?", (deal["loan_case_id"],)).fetchone()
         if f:

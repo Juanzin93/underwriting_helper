@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from tests.deal_helpers import fund_deal
 from tests.lifecycle_helpers import APPROVED, advance, satisfy
 from uwhelper.bootstrap import initialise
 from uwhelper.core import identity
@@ -47,6 +48,7 @@ def _deal(conn, org_id=None, **kw):
 
 
 def _move(conn, did, *statuses, **extra):
+    extra.setdefault("override_reason", "Test scenario: offers and conditions are not tracked here")
     for s in statuses:
         crm.transition_deal(conn, did, DealStatusIn(to_status=s, reason=f"Moving the deal to {s}", **extra))
 
@@ -68,8 +70,10 @@ def test_new_deal_statuses_and_transitions(conn):
     crm.transition_deal(conn, did, DealStatusIn(to_status="APPROVED", reason="Lender approved the request",
                                                 authorized_by="Pat Broker", confirm=True))
     _move(conn, did, "DUE_DILIGENCE", "CLOSING")
-    crm.transition_deal(conn, did, DealStatusIn(to_status="FUNDED", reason="Lender wired the loan proceeds",
-                                                authorized_by="Pat Broker", confirm=True))
+    with pytest.raises(ValidationFailure, match="Confirm funding"):
+        crm.transition_deal(conn, did, DealStatusIn(to_status="FUNDED", reason="Lender wired the loan proceeds",
+                                                    authorized_by="Pat Broker", confirm=True))
+    fund_deal(conn, did)
     _move(conn, did, "SERVICING")
     d = crm.get_deal(conn, did)
     assert d["status"] == "SERVICING" and d["allowed_transitions"] == []
@@ -151,8 +155,7 @@ def test_guards_prevent_contradictory_terminal_states(conn, settings):
         crm.transition_deal(conn, did2, DealStatusIn(to_status=s, reason="Lender approved the request",
                                                      authorized_by="Pat Broker", confirm=True))
     _move(conn, did2, "DUE_DILIGENCE", "CLOSING")
-    crm.transition_deal(conn, did2, DealStatusIn(to_status="FUNDED", reason="Outside lender funded the loan",
-                                                 authorized_by="Pat Broker", confirm=True))
+    fund_deal(conn, did2)
     with pytest.raises(TransitionRefused, match="funded deal"):
         L.transition(conn, out2["case_id"], "WITHDRAWN", "Borrower no longer needs the file")
     # A deal cannot be funded while its file is withdrawn.
@@ -166,8 +169,7 @@ def test_guards_prevent_contradictory_terminal_states(conn, settings):
                                                  authorized_by="Pat Broker", confirm=True))
     _move(conn, did3, "DUE_DILIGENCE", "CLOSING")
     with pytest.raises(ValidationFailure, match="Reopen it"):
-        crm.transition_deal(conn, did3, DealStatusIn(to_status="FUNDED", reason="Lender funded the loan",
-                                                     authorized_by="Pat Broker", confirm=True))
+        fund_deal(conn, did3)
 
 
 def test_link_existing_file_rules(conn, settings):

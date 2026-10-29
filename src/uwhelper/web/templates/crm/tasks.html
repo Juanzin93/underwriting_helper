@@ -14,5 +14,9 @@
 <input type="text" name="assignee" value="{{ assignee }}" placeholder="Assignee" aria-label="Assignee"><button class="small secondary">Show</button></form>
 {{ task_table(tasks, '/tasks?view=' ~ view) }}
 <div class="panel">{{ task_form('/tasks', deals=deals) }}</div>
+{% if overdue.dd_items or overdue.conditions %}<h2>Overdue due diligence and conditions</h2>
+<table><tr><th>Deal</th><th>Item</th><th>Status</th><th>Due</th></tr>
+{% for i in overdue.dd_items %}<tr><td><a href="/deals/{{ i.deal_id }}/closing#diligence">{{ i.deal_number }}</a> {{ i.deal_name }}</td><td>{{ i.item_type.replace('_',' ') }}{% if i.vendor_name %} · {{ i.vendor_name }}{% endif %}</td><td>{{ i.status.replace('_',' ') }}</td><td><span class="badge rejected">{{ i.due_on }}</span></td></tr>{% endfor %}
+{% for c in overdue.conditions %}<tr><td><a href="/deals/{{ c.deal_id }}/closing#conditions">{{ c.deal_number }}</a> {{ c.deal_name }}</td><td>{{ c.description }}</td><td>{{ c.status }}</td><td><span class="badge rejected">{{ c.due_on }}</span></td></tr>{% endfor %}</table>{% endif %}
 <p class="small muted">Dates use this PC's local calendar. Tasks are reminders only — nothing is sent or scheduled outside the app.</p>
 {% endblock %}

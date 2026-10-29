@@ -95,3 +95,14 @@ CREDIT_REVIEW is optional for a deal (a lender may do its own review).
 Guards: a file cannot be funded while its deal is declined/withdrawn/cancelled; a file cannot be declined/withdrawn/
 cancelled while its deal is funded or servicing; a deal cannot be funded while its file is declined/withdrawn/cancelled.
 A closed deal is never reopened automatically. An existing file can be linked to a deal from the deal page.
+
+## Deal gates, closing and funding (Milestone 6)
+
+| Deal moves to | Hard (must fix) | Soft (resolve, or override with a reason ≥ 20 characters) |
+|---|---|---|
+| DUE_DILIGENCE | — | no accepted lender offer |
+| CLOSING | — | required due-diligence/closing conditions open; required due-diligence items not reviewed/waived; required document requests outstanding |
+| FUNDED (funding confirmation only) | no closing record with a closing date; required conditions still open | due-diligence items outstanding; final terms or funded amount differ from the accepted offer; no accepted offer |
+
+A deal becomes FUNDED only through **Closing & funding → Confirm funding** (typed phrase, amount, date, who), or
+automatically when its linked underwriting file is funded. Overrides are written into the status history and audit.

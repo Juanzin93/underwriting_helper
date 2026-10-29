@@ -60,19 +60,30 @@ the commercial module, sharing fields and extraction.
 | 5.4 | Fee agreements (broker fee, lender compensation, referral split; flat / % of funded / % of broker gross), never edited (void + replace); configurable disclosure (`UWH_BROKER_DISCLOSURE`); funded amount from confirmed funding → accepted offer → requested (labelled estimate) | `test_fee_agreement_validation`, `test_fee_math_to_the_cent_*` |
 | 5.5 | Append-only commission ledger (expected in/out, received, paid out, reversals), receivable/payable per deal, aging buckets, all-deals Commissions page | `test_ledger_*`, `test_recalculate_after_reversing_expected` |
 
-## Milestone 6 — lender approval to funding on deals (next)
+## Milestone 6 — lender approval to funding on deals ✅
+
+| # | Delivered | Verified by (`tests/unit/test_m6_closing.py`) |
+|---|---|---|
+| 6.1 | Lender conditions on deals (added one by one or pasted from the commitment, linked to the accepted offer): open → received → satisfied by a named person, or waived with a name and reason; evidence documents; append-only history | `test_condition_lifecycle` |
+| 6.2 | Due-diligence tracker (appraisal, environmental, title, insurance, survey, UCC search, …): vendor, ordered/due/received dates, report document, named review or waiver, re-order with a reason; overdue items and conditions listed on the Tasks page | `test_due_diligence_tracker_and_overdue` |
+| 6.3 | Closing record (final terms prefilled from the accepted offer; differences flagged; locked after funding) and an immutable typed funding confirmation (amount, date, who); a deal becomes FUNDED only this way (or by its file's funding); commissions use the confirmed amount | `test_funding_confirmation_is_the_only_way_to_funded`, `test_differences_from_offer_*` |
+| 6.4 | Gates on deal status changes (DUE_DILIGENCE, CLOSING, FUNDED) with hard and soft blockers, documented overrides stored in history and audit, and a "what blocks the next step" panel linking to each item | `test_closing_gate_soft_blockers_need_override`, `test_due_diligence_gate_*` |
+
+**Behaviour changes (API):** `POST /api/v1/deals/{id}/status` with `to_status: FUNDED` now returns 422 — use
+`PUT …/closing/record` and `POST …/funding`. Moving a deal to DUE_DILIGENCE or CLOSING with open items needs
+`override_reason` (≥ 20 characters).
+
+## Milestone 7 — servicing and portfolio across deals (next)
 
 | # | Item | Depends on | Acceptance criteria |
 |---|---|---|---|
-| 6.1 | **Lender conditions from the accepted offer.** Record the lender's commitment conditions on the deal (reuse the condition engine: requested → received → satisfied / waived by a named person), linked to deal documents | M5 | Conditions immutable history; waivers need a reason and a name; deal cannot move to CLOSING with required open conditions (override with documented reason) |
-| 6.2 | **Due-diligence tracker on deals.** Third-party items (appraisal, environmental, title, insurance) with vendor, ordered/received dates and status; reuse tasks for follow-ups | 6.1, M2 tasks | Overdue items surface on the Tasks page; every status change audited |
-| 6.3 | **Closing and funding on deals.** Closing date, final terms (from the accepted offer, differences flagged), typed funding confirmation (who, when, amount); deal → FUNDED only through this confirmation; links to the underwriting file's own funding when present | 6.1 | FUNDED requires the confirmation record; funded amount differences from the offer are flagged; commission expectations use the confirmed amount |
-| 6.4 | **Deal-level checklist view.** One page showing what blocks the next deal status (documents, conditions, due diligence, tasks) with links | 6.1–6.3 | Each blocker links to where it is resolved; hard vs soft blockers distinguished as in the file lifecycle |
+| 7.1 | **Brokered-loan monitoring.** For funded deals without an in-app servicing account: maturity, rate reset and balloon dates from the funding and accepted offer; reminders (tasks) ahead of each date | M6 | Dates computed from stored terms (tested); reminders created once, never duplicated |
+| 7.2 | **Portfolio views.** Funded volume, count and commissions by lender, referral source, product and month; filters; CSV export of the table (local file) | M5, M6 | Totals reconcile to the deal and ledger records in tests; export contains only the visible columns |
+| 7.3 | **Covenant and delinquency monitoring across files** using the existing `servicing/` data, surfaced per deal and on a portfolio watchlist | existing servicing | Watchlist matches the per-file alerts; no duplicate alerts |
+| 7.4 | **Daily accrual and payoff quotes** for in-app serviced loans (actual/365 and actual/360 options, per-diem, good-through date) | existing servicing | Hand-worked examples to the cent; quotes stored with their inputs and re-checkable |
 
 ## Backlog (planned, not started)
 
-* **M7 — Servicing and portfolio.** Reuse `servicing/`; portfolio by lender/referral source; covenant and
-  delinquency monitoring across deals; daily accrual and payoff quotes.
 * **M8 — Opt-in integrations and direct lending.** Adapters behind `uwhelper.integrations` (each disabled by default,
   separately enabled, confirmation listing shared data); direct-lending module (own capital, funding sources,
   approval authority matrix). Requires authentication and a licensing review first.

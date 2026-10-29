@@ -160,10 +160,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     from uwhelper.web.routes import cre as cre_routes
     from uwhelper.web.routes import brokerage as brokerage_routes
+    from uwhelper.web.routes import closing as closing_routes
     from uwhelper.web.routes import lenders as lender_routes
 
     for module in (health, api_v1, cases, documents, facts, analysis, reports, system, lifecycle, servicing, crm,
-                   cre_routes, lender_routes, brokerage_routes):
+                   cre_routes, lender_routes, brokerage_routes, closing_routes):
         app.include_router(module.router)
 
     from uwhelper.integrations import IntegrationDisabled

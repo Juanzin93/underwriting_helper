@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from tests.deal_helpers import fund_deal
 from tests.lifecycle_helpers import advance
 from uwhelper.brokerage import fees as F
 from uwhelper.brokerage import packages as P
@@ -53,6 +54,7 @@ def _setup(conn, settings, with_file=True):
 
 
 def _move(conn, did, *statuses, **kw):
+    kw.setdefault("override_reason", "Test scenario: conditions are not tracked here")
     for s in statuses:
         crm.transition_deal(conn, did, DealStatusIn(to_status=s, reason=f"Moving to {s} now", **kw))
 
@@ -258,8 +260,7 @@ def _funded_deal(conn, settings, ctx=None):
     sid = _submitted(conn, ctx)
     S.accept_offer(conn, did, S.add_offer(conn, did, sid, _offer()), S.DecisionIn(decided_by="Pat", confirm=True))
     _move(conn, did, "DUE_DILIGENCE", "CLOSING")
-    crm.transition_deal(conn, did, DealStatusIn(to_status="FUNDED", reason="Lender wired the proceeds",
-                                                authorized_by="Pat Broker", confirm=True))
+    fund_deal(conn, did)
     return did, split
 
 
