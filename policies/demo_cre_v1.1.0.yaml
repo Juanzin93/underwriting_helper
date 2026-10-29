@@ -1,0 +1,84 @@
+# ============================================================================
+# ILLUSTRATIVE DEMO POLICY — NOT A LENDING STANDARD (commercial real estate)
+# Property-level underwriting uses NOI, not business EBITDA.
+# ============================================================================
+policy_key: demo_cre
+version: "1.1.0"
+name: "Demo Commercial Real Estate Policy"
+module: commercial
+loan_types: [commercial_real_estate]
+effective_date: 2026-10-01
+illustrative: true
+disclaimer: >-
+  ILLUSTRATIVE thresholds for software testing only. Not a universal standard,
+  not lender guidance, not legal or credit advice.
+source_description: "Synthetic demo policy authored for UW Helper; no external source."
+parameters:
+  collateral_advance_rates:
+    real_estate: 0.75
+    other: 0.0
+rules:
+  - id: PROPERTY_DSCR_MIN
+    version: 1
+    description: "Property DSCR (NOI / proposed debt service) at least 1.25x (illustrative)"
+    type: metric_threshold
+    metric: dscr_property
+    operator: ">="
+    threshold: 1.25
+    round_to: 2
+    severity: high
+  - id: CRE_LTV_MAX
+    version: 1
+    description: "LTV at most 75% (illustrative)"
+    type: metric_threshold
+    metric: ltv
+    operator: "<="
+    threshold: 0.75
+    round_to: 4
+    severity: high
+  - id: DEBT_YIELD_MIN
+    version: 1
+    description: "Debt yield at least 9% (illustrative)"
+    type: metric_threshold
+    metric: debt_yield
+    operator: ">="
+    threshold: 0.09
+    round_to: 4
+    severity: medium
+  - id: CRE_VALUATION_AGE
+    version: 1
+    description: "Appraisal no older than 365 days (illustrative)"
+    type: valuation_age
+    max_age_days: 365
+    severity: high
+  - id: CRE_DOCS
+    version: 1
+    description: "Appraisal, rent roll and operating statement on file"
+    type: documents_present
+    documents: [appraisal, rent_roll, operating_statement]
+    severity: medium
+  - id: CRE_PROPERTY_INPUTS
+    version: 1
+    description: "Property operating inputs present and verified"
+    type: inputs_present
+    required_inputs: [gross_potential_rent, vacancy_credit_loss, other_property_income, property_operating_expenses]
+    severity: high
+  - id: CRE_NO_CONTRADICTIONS
+    version: 1
+    description: "No unresolved contradictions between source documents"
+    type: no_contradictions
+    severity: high
+# --- v1.1.0: policy-defined conditions (ILLUSTRATIVE checklist) ---
+conditions:
+  - {code: DD-FORMATION, description: "Formation documents and good-standing certificate", category: business_identity, due_days: 21}
+  - {code: DD-BENEFICIAL-OWNERS, description: "Beneficial ownership certification", category: ownership, waivable: false, due_days: 21}
+  - {code: DD-APPRAISAL, description: "Independent appraisal of the property", category: collateral_valuation, responsible_party: appraiser, waivable: false, due_days: 45}
+  - {code: DD-RENT-ROLL, description: "Certified current rent roll and leases", category: financial_statements, due_days: 21}
+  - {code: DD-OPERATING-STMTS, description: "Two years of property operating statements and current T-12", category: financial_statements, due_days: 21}
+  - {code: DD-TITLE, description: "Title commitment showing lender's lien position", category: title_and_liens, responsible_party: title_company, waivable: false, due_days: 30}
+  - {code: DD-ENVIRONMENTAL, description: "Environmental screen / Phase I report", category: other, responsible_party: third_party, due_days: 45}
+  - {code: DD-INSURANCE, description: "Hazard and liability insurance with lender as mortgagee / additional insured", category: insurance, responsible_party: insurance_agent, due_days: 30}
+  - {code: CL-MORTGAGE, phase: CLOSING, description: "Mortgage / deed of trust and assignment of rents prepared by counsel", category: loan_documents, responsible_party: attorney, waivable: false}
+  - {code: CL-TITLE-POLICY, phase: CLOSING, description: "Lender's title policy issued or marked-up commitment", category: title_and_liens, responsible_party: title_company, waivable: false}
+  - {code: CL-SIGNATURES, phase: CLOSING, description: "All loan documents signed by authorized signers", category: signatures, waivable: false}
+  - {code: CL-FINAL-REVIEW, phase: CLOSING, description: "Final pre-funding review completed by a responsible human", category: final_review, responsible_party: lender, waivable: false}

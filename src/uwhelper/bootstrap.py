@@ -19,6 +19,11 @@ def initialise(settings: Settings) -> tuple[Database, LoadReport]:
         applied = apply_migrations(conn)
         if applied:
             log.info("Applied migrations: %s", applied)
+        from uwhelper.repo.audit import backfill_chain
+
+        hashed = backfill_chain(conn)
+        if hashed:
+            log.info("Hash-chained %s pre-existing audit events", hashed)
         report = sync_policies_dir(conn, settings.policies_dir)
     for err in report.errors:
         log.error("Policy load error: %s", err)

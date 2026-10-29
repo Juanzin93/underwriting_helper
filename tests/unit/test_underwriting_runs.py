@@ -40,7 +40,7 @@ def test_run_saved_with_metrics_rules_evidence(conn, full_case):
     run = get_run(conn, res.run_id)
     assert run["metrics_by_key"]["dscr"]["value"] == "2.683676"
     assert run["metrics_by_key"]["dscr"]["formula"]
-    assert run["evaluations"] and run["policy_version"] == "1.0.0"
+    assert run["evaluations"] and run["policy_version"] == "1.1.0"
     assert conn.execute("SELECT COUNT(*) FROM evidence_refs WHERE run_id=?", (res.run_id,)).fetchone()[0] > 0
 
 
@@ -83,12 +83,12 @@ def test_policy_version_change_preserved_in_history(conn, full_case):
     r1 = run_underwriting(conn, full_case)
     text = (PROJECT_ROOT / "policies" / "demo_commercial_general_v1.0.0.yaml").read_text(encoding="utf-8")
     data = yaml.safe_load(text)
-    data["version"] = "1.1.0"
+    data["version"] = "9.9.0"
     next(r for r in data["rules"] if r["id"] == "DSCR_MIN")["threshold"] = 3.0
     register_policy(conn, parse_policy_text(yaml.safe_dump(data)))
     r2 = run_underwriting(conn, full_case)
     a, b = get_run(conn, r1.run_id), get_run(conn, r2.run_id)
-    assert (a["policy_version"], b["policy_version"]) == ("1.0.0", "1.1.0")
+    assert (a["policy_version"], b["policy_version"]) == ("1.1.0", "9.9.0")
     ea = next(e for e in a["evaluations"] if e["rule_id"] == "DSCR_MIN")
     eb = next(e for e in b["evaluations"] if e["rule_id"] == "DSCR_MIN")
     assert ea["result"] == "PASS" and eb["result"] == "FAIL"

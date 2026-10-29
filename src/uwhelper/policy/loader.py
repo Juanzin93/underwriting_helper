@@ -32,7 +32,11 @@ class PolicyVersionConflict(PolicyError):
 
 
 def canonical_json(policy: Policy) -> str:
-    return json.dumps(policy.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    data = policy.model_dump(mode="json")
+    if not data.get("conditions"):
+        # Policies without conditions hash exactly as before the field existed (keeps v1.0.0 ids stable).
+        data.pop("conditions", None)
+    return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
 
 def policy_sha256(policy: Policy) -> str:
@@ -77,6 +81,12 @@ def validate_against_module(policy: Policy, source: str = "") -> None:
         for d in rule.documents:
             if d not in module.document_types():
                 raise PolicyError(f"{source}: rule {rule.id} references unknown document type {d!r}")
+    for tpl in policy.conditions:
+        if tpl.applies_to != "all":
+            for lt in tpl.applies_to:
+                if lt not in module.loan_types:
+                    raise PolicyError(f"{source}: condition {tpl.code} applies to unknown loan type {lt!r}")
+    for rule in policy.rules:
         for cond in [*rule.conditions, *(c for e in rule.exceptions for c in e.when)]:
             kind, name = cond.subject.split(":", 1)
             if kind == "metric" and name not in metrics:
@@ -118,11 +128,10 @@ def register_policy(conn: sqlite3.Connection, policy: Policy, source_file: str |
              policy.effective_date.isoformat(), int(policy.illustrative), policy.source_description, source_file,
              digest, canonical_json(policy), utcnow()),
         )
-        conn.execute(
-            "INSERT INTO audit_events(occurred_at, entity_type, entity_id, action, details_json) VALUES (?,?,?,?,?)",
-            (utcnow(), "policy", pid, "policy_version_registered",
-             json.dumps({"policy_key": policy.policy_key, "version": policy.version, "sha256": digest})),
-        )
+        from uwhelper.repo import audit
+
+        audit.record(conn, "policy_version_registered", "policy", pid, None,
+                     {"policy_key": policy.policy_key, "version": policy.version, "sha256": digest})
     return pid, True
 
 
@@ -156,8 +165,9 @@ def list_policies(conn: sqlite3.Connection) -> list[dict]:
     return out
 
 
-def resolve_policy(conn: sqlite3.Connection, policy_key: str, version: str | None = None) -> tuple[str, Policy]:
-    """Return (policy_id, Policy) for an exact version or the highest version."""
+def resolve_policy(conn: sqlite3.Connection, policy_key: str, version: str | None = None,
+                   as_of=None) -> tuple[str, Policy]:
+    """Return (policy_id, Policy) for an exact version, else the highest version in effect on ``as_of``."""
     if version:
         row = conn.execute("SELECT * FROM policies WHERE policy_key = ? AND version = ?", (policy_key, version)).fetchone()
         if not row:
@@ -166,5 +176,9 @@ def resolve_policy(conn: sqlite3.Connection, policy_key: str, version: str | Non
     rows = conn.execute("SELECT * FROM policies WHERE policy_key = ?", (policy_key,)).fetchall()
     if not rows:
         raise PolicyError(f"Policy {policy_key!r} is not registered")
-    best = max(rows, key=lambda r: tuple(int(x) for x in r["version"].split(".")))
+    from datetime import date as _date
+
+    today = (as_of or _date.today()).isoformat()
+    in_effect = [r for r in rows if r["effective_date"] <= today] or rows  # fall back if none is in effect yet
+    best = max(in_effect, key=lambda r: tuple(int(x) for x in r["version"].split(".")))
     return best["id"], policy_from_row(best)

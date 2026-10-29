@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Preliminary Credit Memo — {{ m.case.case_number }} — v{{ m.memo_version }}</title>
+{% if not for_pdf %}
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #111; max-width: 1050px; margin: 24px auto; padding: 0 16px; font-size: 14px; line-height: 1.45; }
+  h1 { font-size: 24px; margin-bottom: 2px; } h2 { font-size: 18px; border-bottom: 2px solid #333; padding-bottom: 3px; margin-top: 26px; }
+  h3 { font-size: 15px; margin: 14px 0 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 14px; }
+  th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 13px; }
+  th { background: #eef0f3; } td.num { text-align: right; white-space: nowrap; }
+  .banner { border: 3px solid #111; padding: 10px; font-weight: 600; background: #fffbe6; }
+  .small { font-size: 12px; color: #444; } .label { font-size: 11px; font-weight: 700; border: 1px solid #666; padding: 0 4px; border-radius: 3px; }
+  .box { border: 2px dashed #777; padding: 10px; background: #f7f7f7; }
+</style>
+{% endif %}
+</head>
+<body>
+<h1>Preliminary Credit Memo</h1>
+<p class="small">{{ m.case.case_number }} · Memo version {{ m.memo_version }} · Generated {{ m.generated_at }} ·
+Underwriting run #{{ m.run.run_number }} ({{ m.run.created_at }}, {{ m.run.mode }}) · Run ID {{ m.run.id }} ·
+Policy {{ m.run.policy_key }} v{{ m.run.policy_version }} · Generator {{ m.generator_version }} · Inputs SHA-256 {{ m.run.inputs_sha256[:16] }}…</p>
+<p class="banner">PRELIMINARY ANALYSIS — NOT A CREDIT DECISION OR APPROVAL. A recommendation in this memo is a preliminary
+analytical opinion that requires human credit review.{% if m.run.illustrative %} Policy thresholds are ILLUSTRATIVE demo values.{% endif %}
+{% if m.case.is_synthetic %} SYNTHETIC SAMPLE DATA.{% endif %}</p>
+<p class="small">Labels: <b>[FACT]</b> verified source value · <b>[CALC]</b> deterministic Python calculation ·
+<b>[ASSUMPTION]</b> user/policy assumption · <b>[ANALYST]</b> analyst-entered commentary · <b>[UNVERIFIED]</b> not confirmed ·
+<b>[MODEL]</b> local-model narrative (not authoritative).</p>
+
+<h2>1. Executive summary</h2>
+<p><b>Preliminary analytical opinion [CALC from rule results]:</b> {{ m.opinion_text }}</p>
+<p>Screening status of run #{{ m.run.run_number }}: <b>{{ m.run.overall_status.replace('_',' ') }}</b>.
+{{ m.exceptions|length }} policy exception/unknown item(s), {{ m.contradictions|length }} unresolved contradiction(s),
+{{ m.unverified|length }} unverified fact(s), {{ m.missing_docs|length }} missing required document type(s).</p>
+<ul>
+{% for x in m.metrics if x.key in ('dscr','global_dscr','dscr_property','ltv','debt_to_ebitda','current_ratio') %}
+<li>{{ x.label }}: {% if x.status == 'computed' %}<b>{{ x.value|fmtval(x.unit) }}</b> [CALC]{% else %}not available — {{ x.explanation[:160] }}{% endif %}</li>
+{% endfor %}
+</ul>
+{% if m.analyst.summary %}<p><span class="label">ANALYST</span> {{ m.analyst.summary }}</p>{% endif %}
+
+<h2>2. Borrower and business profile</h2>
+<table>
+<tr><th>Legal name</th><td>{{ m.borrower.legal_name }}</td><th>Entity type</th><td>{{ m.borrower.entity_type or 'Not recorded' }}</td></tr>
+<tr><th>Industry</th><td>{{ m.borrower.industry or 'Not recorded' }}{% if m.borrower.naics_code %} (NAICS {{ m.borrower.naics_code }}){% endif %}</td><th>Established</th><td>{{ m.borrower.year_established or 'Not recorded' }} {{ m.borrower.state_of_formation or '' }}</td></tr>
+</table>
+<p class="small">Profile fields are user-entered case data.</p>
+{% if m.analyst.business_profile %}<p><span class="label">ANALYST</span> {{ m.analyst.business_profile }}</p>{% else %}<p>No further business description is recorded; none is asserted.</p>{% endif %}
+
+<h2>3. Loan request and purpose</h2>
+{% set t = m.terms %}
+{% if t.requested_amount %}
+<table>
+<tr><th>Requested amount [ASSUMPTION: requested terms rev. {{ t.revision }}]</th><td class="num">{{ t.requested_amount|money }}</td><th>Purpose</th><td>{{ t.loan_purpose or 'Not recorded' }}</td></tr>
+<tr><th>Rate</th><td>{{ t.interest_rate|rate }} {{ t.rate_type }}</td><th>Repayment</th><td>{{ t.repayment_type }}; term {{ t.term_months or '—' }} mo; amortization {{ t.amortization_months or '—' }} mo</td></tr>
+<tr><th>Secured</th><td>{{ 'Yes' if t.is_secured else 'No' }}</td><th>Project cost</th><td class="num">{{ t.project_total_cost|money }}</td></tr>
+</table>
+{% else %}<p><b>Requested terms are not recorded.</b></p>{% endif %}
+
+<h2>4. Proposed loan terms (simulated structures marked “proposed”)</h2>
+{% for s in m.proposed_structures %}
+<h3>{{ s.name }} [ASSUMPTION + CALC]</h3>
+<table><tr><th>Principal</th><th>Rate</th><th>Term / amort / IO (mo)</th><th>Frequency</th><th>Regular payment</th><th>Max annual DS</th><th>Lowest-year DSCR</th><th>LTV</th><th>Balloon</th></tr>
+<tr><td class="num">{{ s.inputs.principal|money }}</td><td>{{ s.inputs.annual_rate|rate }} {{ s.inputs.rate_type }}</td><td>{{ s.inputs.term_months }} / {{ s.inputs.amortization_months }} / {{ s.inputs.interest_only_months }}</td>
+<td>{{ s.inputs.payment_frequency }}</td><td class="num">{{ s.results.level_payment|money(2) }}</td><td class="num">{{ s.results.max_annual_debt_service|money }}</td>
+<td>{{ s.results.dscr_minimum|ratio if s.results.dscr_minimum else 'n/a' }}</td><td>{{ s.results.ltv|pct if s.results.ltv else 'n/a' }}</td><td class="num">{{ s.results.balloon_payment|money }}</td></tr></table>
+{% else %}<p>No structure has been marked “proposed”. Proposed terms are not available.</p>{% endfor %}
+
+<h2>5. Business financial history [FACT — verified values only]</h2>
+{% if m.history %}
+<table><tr><th>Line item</th>{% for p in m.history_periods %}<th class="num">{{ p }}</th>{% endfor %}</tr>
+{% for row in m.history %}<tr><td>{{ row.label }}</td>{% for c in row.cells %}<td class="num">{{ c.value|money if c.value else '—' }}{% if c.source %}<br><span class="small">{{ c.source }}</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
+</table>
+{% else %}<p><b>No verified financial history is available.</b></p>{% endif %}
+
+<h2>6. Cash flow, debt service and key metrics [CALC]</h2>
+<table><tr><th>Metric</th><th class="num">Value</th><th>Formula and inputs</th></tr>
+{% for x in m.metrics %}<tr><td>{{ x.label }}</td><td class="num">{% if x.status == 'computed' %}{{ x.value|fmtval(x.unit) }}{% else %}not available{% endif %}
+{% if 'unverified' in x.flags %}<br><span class="label">UNVERIFIED INPUTS</span>{% endif %}</td>
+<td class="small">{{ x.formula }}<br>{% for i in x.inputs %}{{ i.label }} = {{ i.value|money(2) if i.value else i.state }}{% if i.sources %} ({{ i.sources|join(', ') }}){% endif %}{% if not loop.last %}; {% endif %}{% endfor %}
+{% if x.status != 'computed' %}<br>{{ x.explanation[:300] }}{% endif %}</td></tr>{% endfor %}
+</table>
+
+<h2>7. Existing debt obligations</h2>
+{% if not m.debt_schedule_confirmed %}<p><b>The debt schedule has not been confirmed complete.</b></p>{% endif %}
+{% if m.debts %}<table><tr><th>Creditor</th><th class="num">Balance</th><th>Rate</th><th class="num">Payment</th><th>Frequency</th><th>Maturity</th><th>Refinanced</th><th>Status</th></tr>
+{% for d in m.debts %}<tr><td>{{ d.creditor }}</td><td class="num">{{ d.current_balance|money }}</td><td>{{ d.interest_rate|rate }}</td><td class="num">{{ d.payment_amount|money(2) }}</td><td>{{ d.payment_frequency }}</td><td>{{ d.maturity_date or '—' }}</td><td>{{ 'yes' if d.to_be_refinanced else 'no' }}</td><td>{{ d.verification_status|upper }}</td></tr>{% endfor %}
+</table>{% else %}<p>No existing debts recorded.</p>{% endif %}
+
+<h2>8. Collateral and guarantor analysis</h2>
+{% if m.collateral %}<table><tr><th>Collateral</th><th>Type</th><th>Lien</th><th class="num">Prior liens</th><th class="num">Value</th><th>Date</th><th>Method</th><th>Status</th></tr>
+{% for c in m.collateral %}<tr><td>{{ c.description }}</td><td>{{ c.type }}</td><td>{{ c.lien }}</td><td class="num">{{ c.prior_liens|money }}</td><td class="num">{{ c.value|money if c.value else 'none' }}</td><td>{{ c.date or '—' }}</td><td>{{ c.method or '—' }}</td><td>{{ c.status|upper }}</td></tr>{% endfor %}
+</table>{% else %}<p>No collateral recorded.</p>{% endif %}
+{% if m.parties %}<table><tr><th>Owner / guarantor</th><th>Type</th><th>Ownership</th><th>Guarantee</th></tr>
+{% for p in m.parties %}<tr><td>{{ p.name }}</td><td>{{ p.party_type }}</td><td>{{ (p.ownership_pct ~ '%') if p.ownership_pct else '—' }}</td><td>{{ p.guarantee_type if p.is_guarantor else 'none' }}</td></tr>{% endfor %}
+</table>{% else %}<p>No owners or guarantors recorded.</p>{% endif %}
+
+<h2>9. Industry and business risks</h2>
+{% if m.analyst.industry_risks %}<p><span class="label">ANALYST</span> {{ m.analyst.industry_risks }}</p>
+{% else %}<p>No industry or market evidence is recorded in this case. The memo does not assert any industry or market facts.</p>{% endif %}
+<h3>Risks indicated by policy screening [CALC]</h3>
+<ul>{% for e in m.exceptions %}<li><b>{{ e.rule_id }} — {{ e.result }}</b>: {{ e.description }}. {{ e.explanation[:400] }}</li>{% else %}<li>No exceptions from the configured rules (this does not mean there are no risks).</li>{% endfor %}</ul>
+
+<h2>10. Strengths and possible mitigating factors</h2>
+<ul>{% for s in m.strengths %}<li>{{ s }}</li>{% else %}<li>No metric clears its policy threshold by a wide margin (≥20%), so none is listed as a strength.</li>{% endfor %}</ul>
+{% if m.mitigants %}<h3>Possible mitigants (for human evaluation)</h3><ul>{% for s in m.mitigants %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+{% if m.analyst.mitigants %}<p><span class="label">ANALYST</span> {{ m.analyst.mitigants }}</p>{% endif %}
+
+<h2>11. Missing documents and unverified facts</h2>
+<p>Missing required document types: {{ m.missing_docs|join(', ') if m.missing_docs else 'none per configured rules' }}.</p>
+{% if m.unverified %}<table><tr><th>Field [UNVERIFIED]</th><th>Period</th><th class="num">Value</th><th>Source</th></tr>
+{% for f in m.unverified %}<tr><td>{{ f.field }}</td><td>{{ f.period or '—' }}</td><td class="num">{{ f.value }}</td><td>{{ f.source }}</td></tr>{% endfor %}</table>
+{% else %}<p>No unverified facts.</p>{% endif %}
+
+<h2>12. Conflicts between documents</h2>
+{% for c in m.contradictions %}<p><b>{{ c.field }}</b> ({{ c.period or 'n/a' }}): {% for v in c.values %}{{ v.value }} from {{ v.source }} [{{ v.status }}]{% if not loop.last %} vs {% endif %}{% endfor %} — unresolved; no value was chosen.</p>
+{% else %}<p>No unresolved conflicts.</p>{% endfor %}
+
+<h2>13. Policy exceptions and failed or unknown rules</h2>
+<table><tr><th>Rule</th><th>Result</th><th>Observed</th><th>Requirement</th></tr>
+{% for e in m.evaluations if e.result != 'NOT_APPLICABLE' %}<tr><td>{{ e.rule_id }} v{{ e.rule_version }} — {{ e.description }}</td><td><b>{{ e.result }}</b>{% if e.indicative_result %} (would be {{ e.indicative_result }}){% endif %}</td><td>{{ e.observed_value or '—' }}</td><td>{{ (e.operator ~ ' ' ~ e.threshold) if e.threshold else '—' }}</td></tr>{% endfor %}
+</table>
+<p class="small">{{ m.policy_disclaimer }} Exceptions listed here are rule results, not lender-approved exceptions.</p>
+
+<h2>14. Key questions for the borrower</h2>
+<ul>{% for q in m.questions %}<li>{{ q }}</li>{% else %}<li>None generated from the recorded data.</li>{% endfor %}</ul>
+
+<h2>15. Proposed conditions — SUGGESTIONS ONLY</h2>
+<p class="small">Generated mechanically from rule results and the case policy. They are not lender requirements until adopted by a human.</p>
+<ul>{% for s in m.suggested_conditions %}<li>[SUGGESTION] {{ s }}</li>{% endfor %}</ul>
+{% if m.open_conditions %}<h3>Recorded conditions still open</h3><ul>{% for c in m.open_conditions %}<li>{{ c.code }} — {{ c.description }} ({{ c.status }}{% if c.required %}, required{% endif %})</li>{% endfor %}</ul>{% endif %}
+
+{% if m.narrative %}
+<h2>16. MODEL-GENERATED narrative (not verified)</h2>
+<div class="box"><p class="small">Generated locally by {{ m.narrative.model }} from structured results only.
+{% if m.narrative.unsupported %}WARNING: numbers not found in the results: {{ m.narrative.unsupported|join(', ') }}.{% endif %}
+{% if m.narrative.decision_language %} WARNING: decision language ({{ m.narrative.decision_language|join(', ') }}) — disregard any implied decision.{% endif %}</p>
+{% if m.narrative.error %}<p>Narrative unavailable: {{ m.narrative.error }}</p>{% else %}{% for para in m.narrative.text.split("\n") if para.strip() %}<p>{{ para }}</p>{% endfor %}{% endif %}</div>
+{% endif %}
+
+<h2>Human review checklist</h2>
+<table><tr><th style="width:40px">Done</th><th>Item</th></tr>{% for i in m.review_checklist %}<tr><td>☐</td><td>{{ i }}</td></tr>{% endfor %}</table>
+
+<h2>Data limitations and assumptions</h2>
+<ul>{% for l in m.limitations %}<li>{{ l }}</li>{% endfor %}{% for f in m.findings %}<li>{{ f.message }}</li>{% endfor %}</ul>
+<p class="small">Documents considered: {% for d in m.documents %}{{ d.name }} ({{ d.type }}, {{ d.sha256 }}…){% if not loop.last %}; {% endif %}{% else %}none{% endfor %}.</p>
+<p class="small">Memo v{{ m.memo_version }} · generated {{ m.generated_at }} from run {{ m.run.id }} · policy {{ m.run.policy_key }} v{{ m.run.policy_version }} · produced locally; no data left this computer.</p>
+</body>
+</html>

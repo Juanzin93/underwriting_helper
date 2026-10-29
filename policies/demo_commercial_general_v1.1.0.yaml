@@ -1,0 +1,219 @@
+# ============================================================================
+# ILLUSTRATIVE DEMO POLICY — NOT A LENDING STANDARD
+# Thresholds below were chosen only to exercise the rule engine. They are not
+# universal commercial lending standards and are not taken from any lender,
+# regulator or program. Replace them with your own sourced policy.
+# Versioning: never edit a registered version; copy the file, bump `version`.
+# ============================================================================
+policy_key: demo_commercial_general
+version: "1.1.0"
+name: "Demo General Commercial Business Policy"
+module: commercial
+loan_types: [general_commercial, working_capital, equipment, business_acquisition]
+effective_date: 2026-10-01
+illustrative: true
+disclaimer: >-
+  ILLUSTRATIVE thresholds for software testing only. Not a universal standard,
+  not lender guidance, not legal or credit advice.
+source_description: "Synthetic demo policy authored for UW Helper; no external source."
+parameters:
+  collateral_advance_rates:
+    real_estate: 0.75
+    equipment: 0.60
+    vehicles: 0.50
+    accounts_receivable: 0.70
+    inventory: 0.40
+    cash_securities: 0.90
+    business_assets: 0.25
+    other: 0.0
+  sensitivity_revenue_shocks: ["0", "-0.05", "-0.10", "-0.15", "-0.20", "-0.25"]
+  sensitivity_rate_shocks_bps: [0, 100, 200, 300]
+  sensitivity_expense_shocks: ["0", "0.05", "0.10"]
+rules:
+  - id: DSCR_MIN
+    version: 1
+    description: "Business pro forma DSCR at least 1.25x (illustrative)"
+    type: metric_threshold
+    metric: dscr
+    operator: ">="
+    threshold: 1.25
+    round_to: 2
+    severity: high
+    explanation: "Observed {observed} vs illustrative minimum {threshold}."
+    exceptions:
+      - id: DSCR_STRONG_COLLATERAL
+        when:
+          - {subject: "metric:dscr", op: ">=", value: 1.15}
+          - {subject: "metric:collateral_coverage", op: ">=", value: 1.50}
+        explanation: "DSCR within 0.10x of minimum and discounted collateral coverage ≥ 1.50x — escalate for judgement."
+  - id: GLOBAL_DSCR_MIN
+    version: 1
+    description: "Global DSCR at least 1.15x when guarantors exist (illustrative)"
+    type: metric_threshold
+    metric: global_dscr
+    operator: ">="
+    threshold: 1.15
+    round_to: 2
+    severity: medium
+  - id: LEVERAGE_MAX
+    version: 1
+    description: "Pro forma funded debt / Adjusted EBITDA at most 3.50x (illustrative)"
+    type: metric_threshold
+    metric: debt_to_ebitda
+    operator: "<="
+    threshold: 3.50
+    round_to: 2
+    severity: medium
+  - id: DEBT_TO_EQUITY_MAX
+    version: 1
+    description: "Total liabilities / equity at most 4.00x (illustrative)"
+    type: metric_threshold
+    metric: debt_to_equity
+    operator: "<="
+    threshold: 4.00
+    round_to: 2
+    severity: medium
+  - id: CURRENT_RATIO_MIN
+    version: 1
+    description: "Current ratio at least 1.20x for working capital loans (illustrative)"
+    type: metric_threshold
+    applies_to: [working_capital]
+    metric: current_ratio
+    operator: ">="
+    threshold: 1.20
+    round_to: 2
+    severity: medium
+  - id: CURRENT_RATIO_MIN_GENERAL
+    version: 1
+    description: "Current ratio at least 1.00x (illustrative)"
+    type: metric_threshold
+    applies_to: [general_commercial, equipment, business_acquisition]
+    metric: current_ratio
+    operator: ">="
+    threshold: 1.00
+    round_to: 2
+    severity: low
+  - id: LTV_MAX_SECURED
+    version: 1
+    description: "LTV at most 80% on secured loans (illustrative)"
+    type: metric_threshold
+    metric: ltv
+    operator: "<="
+    threshold: 0.80
+    round_to: 4
+    severity: high
+    conditions:
+      - {subject: "case:is_secured", op: "==", value: true}
+  - id: COLLATERAL_COVERAGE_MIN
+    version: 1
+    description: "Discounted collateral coverage at least 1.00x on secured loans (illustrative)"
+    type: metric_threshold
+    metric: collateral_coverage
+    operator: ">="
+    threshold: 1.00
+    round_to: 2
+    severity: medium
+    conditions:
+      - {subject: "case:is_secured", op: "==", value: true}
+  - id: LTC_MAX
+    version: 1
+    description: "Loan-to-cost at most 85% for acquisition and equipment loans (illustrative)"
+    type: metric_threshold
+    applies_to: [equipment, business_acquisition]
+    metric: ltc
+    operator: "<="
+    threshold: 0.85
+    round_to: 4
+    severity: medium
+  - id: POSITIVE_EQUITY
+    version: 1
+    description: "Borrower has positive net worth"
+    type: metric_threshold
+    metric: total_equity
+    operator: ">"
+    threshold: 0
+    severity: medium
+  - id: VALUATION_AGE
+    version: 1
+    description: "Collateral valuations no older than 365 days (illustrative)"
+    type: valuation_age
+    max_age_days: 365
+    severity: medium
+  - id: STATEMENT_AGE
+    version: 1
+    description: "Base-period financial statements ended within 548 days (illustrative)"
+    type: statement_age
+    max_age_days: 548
+    severity: medium
+  - id: CORE_INPUTS
+    version: 1
+    description: "Core income-statement and cash-flow inputs are present and verified"
+    type: inputs_present
+    required_inputs: [revenue, net_income, interest_expense, depreciation, amortization, income_tax_expense,
+                      unfinanced_capex, cash_taxes_paid, distributions]
+    severity: high
+  - id: REQUIRED_DOCS
+    version: 1
+    description: "Business tax return and balance sheet on file"
+    type: documents_present
+    documents: [business_tax_return, balance_sheet]
+    severity: medium
+  - id: EQUIPMENT_QUOTE
+    version: 1
+    description: "Equipment invoice or quote on file for equipment financing"
+    type: documents_present
+    applies_to: [equipment]
+    documents: [equipment_quote]
+    severity: medium
+  - id: ACQUISITION_AGREEMENT
+    version: 1
+    description: "Purchase agreement on file for acquisition loans"
+    type: documents_present
+    applies_to: [business_acquisition]
+    documents: [purchase_agreement]
+    severity: medium
+  - id: NO_CONTRADICTIONS
+    version: 1
+    description: "No unresolved contradictions between source documents"
+    type: no_contradictions
+    severity: high
+  - id: GUARANTOR_LARGE_LOAN
+    version: 1
+    description: "Personal guarantee expected for requests above $250,000 (illustrative)"
+    type: guarantor_present
+    severity: medium
+    conditions:
+      - {subject: "terms:requested_amount", op: ">", value: 250000}
+  - id: LARGE_REQUEST_REVIEW
+    version: 1
+    description: "Requests above $2,000,000 always require senior human review (illustrative)"
+    type: review_flag
+    severity: info
+    conditions:
+      - {subject: "terms:requested_amount", op: ">", value: 2000000}
+# --- v1.1.0: policy-defined due-diligence and closing conditions (ILLUSTRATIVE checklist) ---
+# These describe what this demo policy asks for. Whether an item is legally sufficient is a
+# question for counsel; the software never waives or satisfies an item on its own.
+conditions:
+  - {code: DD-FORMATION, description: "Certificate of formation / articles and good-standing certificate", category: business_identity, responsible_party: borrower, due_days: 21}
+  - {code: DD-OPERATING-AGMT, description: "Operating agreement or bylaws, with authority to borrow", category: business_identity, responsible_party: borrower, due_days: 21}
+  - {code: DD-BENEFICIAL-OWNERS, description: "Beneficial ownership certification (owners of 25% or more and one control person)", category: ownership, responsible_party: borrower, waivable: false, due_days: 21}
+  - {code: DD-FIN-STMTS, description: "Two most recent fiscal-year financial statements and current interim statements", category: financial_statements, responsible_party: borrower, due_days: 21}
+  - {code: DD-BUS-TAX, description: "Two most recent business tax returns, signed", category: tax_returns, responsible_party: borrower, due_days: 21}
+  - {code: DD-PERS-TAX, description: "Two most recent personal tax returns of each guarantor", category: tax_returns, responsible_party: guarantor, due_days: 21}
+  - {code: DD-BANK-STMTS, description: "Six most recent months of business bank statements", category: bank_statements, responsible_party: borrower, required: false, due_days: 21}
+  - {code: DD-DEBT-SCHEDULE, description: "Business debt schedule reconciled to balance sheet", category: debt_and_liens, responsible_party: borrower, due_days: 21}
+  - {code: DD-LIEN-SEARCH, description: "UCC / lien and judgment searches on borrower and guarantors", category: debt_and_liens, responsible_party: lender, waivable: false, due_days: 30}
+  - {code: DD-VALUATION, description: "Independent valuation of primary collateral", category: collateral_valuation, responsible_party: appraiser, due_days: 30, conditions: [{subject: "case:is_secured", op: "==", value: true}]}
+  - {code: DD-EQUIP-INVOICE, description: "Final equipment invoice with serial numbers", category: collateral_valuation, responsible_party: borrower, applies_to: [equipment], due_days: 30}
+  - {code: DD-PURCHASE-AGMT, description: "Executed purchase agreement and sources-and-uses", category: other, responsible_party: borrower, applies_to: [business_acquisition], due_days: 30}
+  - {code: DD-INSURANCE, description: "Evidence of property/casualty insurance naming lender as loss payee", category: insurance, responsible_party: insurance_agent, due_days: 30, conditions: [{subject: "case:is_secured", op: "==", value: true}]}
+  - {code: DD-GUARANTEE-PFS, description: "Personal financial statement of each guarantor (dated within 90 days)", category: guarantees, responsible_party: guarantor, due_days: 21}
+  - {code: DD-LICENSES, description: "Business licenses / permits required for operations", category: licenses_permits, responsible_party: borrower, required: false, due_days: 30}
+  - {code: CL-LOAN-AGMT, phase: CLOSING, description: "Loan agreement / promissory note prepared and reviewed by counsel", category: loan_documents, responsible_party: attorney, waivable: false}
+  - {code: CL-SECURITY-AGMT, phase: CLOSING, description: "Security agreement and UCC-1 filing prepared", category: loan_documents, responsible_party: attorney, waivable: false, conditions: [{subject: "case:is_secured", op: "==", value: true}]}
+  - {code: CL-GUARANTY, phase: CLOSING, description: "Guaranty agreement(s) signed", category: signatures, responsible_party: guarantor}
+  - {code: CL-SIGNATURES, phase: CLOSING, description: "All loan documents signed by authorized signers", category: signatures, responsible_party: borrower, waivable: false}
+  - {code: CL-INSURANCE-BINDER, phase: CLOSING, description: "Insurance binder / certificate received before funding", category: insurance, responsible_party: insurance_agent, conditions: [{subject: "case:is_secured", op: "==", value: true}]}
+  - {code: CL-FUNDING-PREREQ, phase: CLOSING, description: "Funding prerequisites met (fees collected, conditions precedent confirmed)", category: funding_prerequisites, responsible_party: lender, waivable: false}
+  - {code: CL-FINAL-REVIEW, phase: CLOSING, description: "Final pre-funding review completed by a responsible human", category: final_review, responsible_party: lender, waivable: false}

@@ -50,10 +50,13 @@ def create_case(conn: sqlite3.Connection, case: CaseIn, borrower: BorrowerIn, te
         number = _next_case_number(conn)
         conn.execute(
             """INSERT INTO loan_cases(id, case_number, title, module_key, loan_type, policy_key, policy_version,
-                   is_synthetic, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   is_synthetic, notes, stage, stage_entered_at, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,'INTAKE',?,?,?)""",
             (case_id, number, case.title, "commercial", case.loan_type, case.policy_key, case.policy_version,
-             int(case.is_synthetic), case.notes, now, now),
+             int(case.is_synthetic), case.notes, now, now, now),
         )
+        conn.execute("INSERT INTO workflow_transitions(case_id, from_stage, to_stage, reason, occurred_at) "
+                     "VALUES (?, NULL, 'INTAKE', 'Case created', ?)", (case_id, now))
         conn.execute(
             """INSERT INTO borrowers(id, case_id, legal_name, dba_name, entity_type, industry, naics_code,
                    state_of_formation, year_established, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
@@ -328,6 +331,10 @@ def list_collateral(conn: sqlite3.Connection, case_id: str) -> list[dict[str, An
 def purge_case(conn: sqlite3.Connection, case_id: str, documents_dir: Path, reports_dir: Path) -> dict[str, int]:
     """Permanently delete a case, its records, reports and any documents not used by another case."""
     case = get_case(conn, case_id)
+    if case["stage"] in ("FUNDED", "SERVICING", "PAID_OFF"):
+        raise ValidationFailure("Funded loans cannot be purged from the app: their servicing and audit records must be "
+                                "retained. Archive the case instead, or delete the data directory manually if your "
+                                "retention policy allows it.")
     doc_rows = conn.execute(
         """SELECT d.id, d.stored_name FROM documents d JOIN case_documents cd ON cd.document_id=d.id
            WHERE cd.case_id=? AND NOT EXISTS (SELECT 1 FROM case_documents o WHERE o.document_id=d.id AND o.case_id!=?)""",
@@ -339,6 +346,7 @@ def purge_case(conn: sqlite3.Connection, case_id: str, documents_dir: Path, repo
             conn.execute("DELETE FROM documents WHERE id=?", (d["id"],))
         # Deletion is a privacy operation: the case's audit trail (which may hold
         # amounts) goes too; one tombstone event without financial data remains.
+        audit.preserve_hashes_before_purge(conn, case_id)
         conn.execute("DELETE FROM audit_events WHERE case_id=?", (case_id,))
         conn.execute("DELETE FROM loan_cases WHERE id=?", (case_id,))
         audit.record(conn, "case_purged", "loan_case", case_id, None,

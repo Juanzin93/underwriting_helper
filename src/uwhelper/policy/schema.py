@@ -106,6 +106,30 @@ class PolicyParameters(BaseModel):
         return v
 
 
+CONDITION_CATEGORIES = (
+    "business_identity", "ownership", "financial_statements", "tax_returns", "bank_statements", "debt_and_liens",
+    "collateral_valuation", "insurance", "guarantees", "title_and_liens", "licenses_permits", "loan_documents",
+    "signatures", "funding_prerequisites", "final_review", "other",
+)
+
+
+class ConditionTemplate(BaseModel):
+    """A due-diligence or closing requirement defined by policy (not by the software)."""
+
+    model_config = ConfigDict(extra="forbid")
+    code: str = Field(pattern=r"^[A-Z][A-Z0-9_\-]{1,40}$")
+    description: str
+    category: Literal[CONDITION_CATEGORIES]  # type: ignore[valid-type]
+    phase: Literal["DUE_DILIGENCE", "CLOSING"] = "DUE_DILIGENCE"
+    required: bool = True
+    waivable: bool = True
+    responsible_party: Literal["borrower", "lender", "guarantor", "third_party", "attorney", "title_company",
+                               "insurance_agent", "appraiser"] = "borrower"
+    due_days: int | None = Field(default=None, ge=0, le=365)
+    applies_to: list[str] | Literal["all"] = "all"
+    conditions: list[Condition] = Field(default_factory=list)
+
+
 class Policy(BaseModel):
     model_config = ConfigDict(extra="forbid")
     policy_key: str = Field(pattern=r"^[a-z][a-z0-9_]{2,63}$")
@@ -119,6 +143,7 @@ class Policy(BaseModel):
     source_description: str
     parameters: PolicyParameters = Field(default_factory=PolicyParameters)
     rules: list[Rule] = Field(min_length=1)
+    conditions: list[ConditionTemplate] = Field(default_factory=list)
 
     @field_validator("version")
     @classmethod
@@ -133,6 +158,9 @@ class Policy(BaseModel):
         dupes = {i for i in ids if ids.count(i) > 1}
         if dupes:
             raise ValueError(f"duplicate rule ids: {sorted(dupes)}")
+        codes = [c.code for c in self.conditions]
+        if len(codes) != len(set(codes)):
+            raise ValueError("duplicate condition codes")
         if self.illustrative and "illustrative" not in self.disclaimer.lower():
             raise ValueError("illustrative policies must carry a disclaimer containing the word 'illustrative'")
         return self
