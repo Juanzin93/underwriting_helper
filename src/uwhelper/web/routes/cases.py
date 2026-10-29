@@ -19,16 +19,24 @@ MODULE = get_module("commercial")
 
 
 def case_context(conn, case_id: str) -> dict:
+    from uwhelper.workflow import lifecycle as L
+
     case = repo.get_case(conn, case_id)
+    actions = [a for a in L.available_actions(conn, case_id) if a["forward"] and a["to_stage"] != "DECLINED"]
     return {"case": case, "loan_types": MODULE.loan_types, "doc_types": MODULE.document_types(),
-            "latest_run_id": latest_run_id(conn, case_id)}
+            "latest_run_id": latest_run_id(conn, case_id), "stage_labels": L.STAGE_LABELS,
+            "next_actions": actions}
 
 
 @router.get("/")
 async def dashboard(request: Request):
+    from uwhelper.workflow import lifecycle as L
+
     with get_db(request).session() as conn:
         cases = repo.list_cases(conn)
-    return render(request, "dashboard.html", cases=cases, loan_types=MODULE.loan_types)
+        stages = L.stage_summary(conn)
+    return render(request, "dashboard.html", cases=cases, loan_types=MODULE.loan_types, stages=stages,
+                  stage_labels=L.STAGE_LABELS)
 
 
 def _policy_options(conn) -> list[dict]:

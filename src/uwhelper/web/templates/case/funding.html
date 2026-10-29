@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Funding confirmation · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<h2>Funding confirmation</h2>
+{% if funding %}<div class="info-box">Funding already confirmed: {{ funding.funded_amount|money(2) }} on {{ funding.funding_date }} by {{ funding.confirmed_by }}.</div>
+{% elif case.stage != 'CLOSING' %}<div class="warning-box">Funding can be confirmed only in the Closing stage.</div>
+{% else %}
+<div class="danger-box">Record this only <b>after</b> the loan was actually funded outside this application. This application does not move money.
+The record cannot be edited afterwards.</div>
+{% if blockers %}<ul>{% for b in blockers %}<li class="{{ 'blocker-hard' if b.hard else 'blocker-soft' }}">{{ '✖ BLOCKER' if b.hard else '⚠ needs documented override' }}: {{ b.message }}{% if b.link %} — <a href="{{ b.link }}">go</a>{% endif %}</li>{% endfor %}</ul>{% endif %}
+{% if blockers|selectattr('hard')|list %}<p><b>Funding is blocked until the ✖ items are resolved.</b></p>{% else %}
+<form method="post" action="/cases/{{ case.id }}/funding" class="panel" data-confirm="Confirm that this loan was funded? This cannot be undone.">{{ csrf() }}
+<p>Executed terms: {{ executed.principal|money }} @ {{ executed.annual_rate|rate }}, {{ executed.term_months }}/{{ executed.amortization_months }}/{{ executed.interest_only_months }} months, {{ executed.payment_frequency }}.
+Approved principal: {{ approved.principal|money if approved else '—' }}.</p>
+<div class="row"><div><label>Actual funded amount *</label><input type="text" name="funded_amount" required value="{{ executed.principal }}"></div>
+<div><label>Funding date *</label><input type="date" name="funding_date" required max="{{ today }}"></div>
+<div><label>First payment date *</label><input type="date" name="first_payment_date" required></div>
+<div><label>Confirmed by *</label><input type="text" name="confirmed_by" required minlength="2"></div></div>
+{% if blockers %}<label>Override reason for the ⚠ items (≥ 20 characters) *</label><input type="text" name="override_reason" required minlength="20">{% endif %}
+<label>Notes</label><input type="text" name="notes">
+<label>Type <b>{{ phrase }}</b> to confirm *</label><input type="text" name="confirmation_text" required autocomplete="off">
+<p><button class="danger">Record funding</button></p></form>{% endif %}
+{% endif %}
+{% endblock %}

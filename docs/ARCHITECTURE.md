@@ -61,7 +61,34 @@ erDiagram
     rule_evaluations ||--o{ evidence_refs : cites
     underwriting_runs ||--o{ reports : "versions"
     loan_cases ||--o{ audit_events : logs
+    loan_cases ||--o{ workflow_transitions : "stage history"
+    loan_cases ||--o{ credit_memos : "versions"
+    underwriting_runs ||--o{ credit_memos : "source run"
+    loan_cases ||--o{ loan_structures : simulates
+    loan_structures ||--o{ structure_calculations : "snapshots"
+    underwriting_runs ||--o{ credit_decisions : "relied on"
+    loan_cases ||--o{ credit_decisions : "human decisions"
+    credit_decisions ||--o{ term_sets : "approved terms"
+    loan_cases ||--o{ loan_conditions : "DD & closing"
+    loan_conditions ||--o{ condition_events : history
+    loan_cases ||--o| closings : workspace
+    loan_cases ||--o| fundings : "human-confirmed"
+    term_sets ||--o{ fundings : "executed terms"
+    fundings ||--|| servicing_accounts : opens
+    servicing_accounts ||--o{ payment_schedules : versions
+    payment_schedules ||--o{ schedule_installments : due
+    servicing_accounts ||--o{ payments : "actual, immutable"
+    servicing_accounts ||--o{ account_fees : charges
+    servicing_accounts ||--o{ covenants : has
+    covenants ||--o{ covenant_tests : results
+    servicing_accounts ||--o{ monitoring_items : "renewals, statements"
+    servicing_accounts ||--o{ monitoring_events : alerts
+    servicing_accounts ||--o{ loan_modifications : history
 ```
+
+Lifecycle tables (migrations 0002–0006) are described in [LIFECYCLE.md](LIFECYCLE.md) and [SERVICING.md](SERVICING.md).
+Immutability triggers protect transitions, memos, decisions, term sets, structure inputs and calculations, condition
+events, fundings, schedule installments, payments, covenant tests, modifications and audit events.
 
 ### Table notes
 * **documents** are unique by `sha256`; `case_documents` lets one stored file serve several cases.
@@ -77,6 +104,11 @@ erDiagram
 * **policies** store canonical JSON + SHA-256 for every version ever loaded; a changed file with an unchanged
   version is refused.
 * Money/ratios are stored as TEXT decimal strings. All SQL is parameterised.
+
+## Audit hash chain (migration 0006)
+Each audit event stores `prev_hash` and `event_hash` (SHA-256 over the previous hash and the event's fields). Events
+created before 0006 are hashed once at startup. When a case is purged, only the ids and hashes of its removed events
+are kept in `audit_purged_hashes`, so the remaining chain stays verifiable. Funded loans cannot be purged from the app.
 
 ## Migration strategy
 Forward-only numbered SQL files in `src/uwhelper/db/migrations/` applied at startup (`uwhelper init` or `serve`),

@@ -69,3 +69,15 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 .footer { margin-top: 30px; font-size: 12px; color: var(--muted); }
 .actions select, .actions input[type=text], .actions input[type=password], .actions input[type=date], .actions input[type=number] { width: auto; min-width: 140px; }
 .actions label { margin: 0; }
+.stagebar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 8px 0 2px; }
+.stage { display: inline-block; font-weight: 800; padding: 3px 10px; border-radius: 4px; border: 2px solid #1f4e8c; background: #e8f0fb; color: #1f4e8c; }
+.stage-DECLINED, .stage-CANCELLED, .stage-WITHDRAWN { border-color: var(--fail); background: var(--fail-bg); color: var(--fail); }
+.stage-ON_HOLD { border-color: var(--review); background: var(--review-bg); color: var(--review); }
+.stage-FUNDED, .stage-SERVICING, .stage-PAID_OFF { border-color: var(--pass); background: var(--pass-bg); color: var(--pass); }
+nav.tabs.lifecycle { margin-top: -10px; border-bottom-style: dashed; }
+.pipeline { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.pipeline span { padding: 4px 9px; border: 1px solid var(--line); border-radius: 14px; font-size: 12.5px; background: #fff; }
+.pipeline span.done { background: var(--pass-bg); border-color: var(--pass); }
+.pipeline span.current { background: #1f4e8c; color: #fff; font-weight: 700; }
+.blocker-hard { color: var(--fail); } .blocker-soft { color: var(--review); }
+.delta-neg { color: var(--pass); } .delta-pos { color: var(--fail); }

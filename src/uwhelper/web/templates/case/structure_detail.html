@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p><a href="/cases/{{ case.id }}/structuring">← Structuring</a></p>
+{% set r = s.results %}
+<h2>{{ s.name }} <span class="small">{{ 'BASELINE' if s.is_baseline else s.status|upper }}</span></h2>
+<p class="small">Calculated {{ s.calc.computed_at }} with engine {{ s.calc.engine_version }}{% if s.calc.run_number %}, CFADS from run #{{ s.calc.run_number }}{% endif %}. Inputs SHA-256 <span class="mono">{{ s.inputs_sha256[:16] }}</span>.</p>
+<div class="grid2">
+<div class="panel"><h3 style="margin-top:0">Input assumptions [ASSUMPTION]</h3><table>
+{% for k, v in s.inputs.items() if k not in ('name','description') %}<tr><th>{{ k.replace('_',' ') }}</th><td>{{ v if v not in (None, [], '') else '—' }}</td></tr>{% endfor %}</table>
+<p class="small">Used: CFADS {{ r.inputs_used.cfads|money }} ({{ r.inputs_used.cfads_source }}), existing debt service {{ r.inputs_used.existing_debt_service|money }}, collateral {{ r.inputs_used.collateral_value|money }}, project cost {{ r.inputs_used.project_cost|money }}.
+{% if 'unverified' in r.inputs_used.cfads_flags %}<b>CFADS uses unverified inputs.</b>{% endif %}</p></div>
+<div class="panel"><h3 style="margin-top:0">Key results [CALC]</h3><table>
+{% for k, label, unit in [('financed_principal','Financed principal','USD'),('interest_only_payment','Interest-only payment','USD'),('level_payment','Regular payment','USD'),('number_of_payments','Number of payments',''),('total_payments','Total scheduled payments','USD'),('total_interest','Total interest','USD'),('balloon_payment','Balloon payment','USD'),('balance_after_12_months','Balance after 12 months','USD'),('balance_after_60_months','Balance after 60 months','USD'),('year1_debt_service','Year-1 debt service','USD'),('max_annual_debt_service','Highest annual debt service','USD'),('dscr_year1','DSCR year 1','ratio'),('dscr_amortizing','DSCR at level payment','ratio'),('dscr_minimum','DSCR lowest year','ratio'),('ltv','LTV','percent'),('ltc','LTC','percent'),('total_fees','Fees and costs','USD'),('net_proceeds','Net proceeds','USD')] %}
+<tr><th>{{ label }}</th><td class="num">{{ (r[k]|fmtval(unit)) if unit and r[k] is not none else (r[k] if r[k] is not none else 'n/a') }}</td></tr>{% endfor %}</table></div></div>
+<h3>Policy checks (screening only, not approval)</h3>
+<ul>{% for p in r.policy_checks %}<li><span class="res {{ p.result|result_class }}">{{ p.result|result_label }}</span> {{ p.rule_id }} — {{ p.explanation }}</li>{% endfor %}</ul>
+<h3>Risks and limitations</h3><ul>{% for x in r.risks %}<li>{{ x }}</li>{% endfor %}</ul>
+<h3>Sensitivity: lowest-year DSCR</h3>
+<table class="sens"><tr><th>CFADS change</th>{% for b in r.sensitivity.rate_shocks_bps %}<th>+{{ b }} bps</th>{% endfor %}</tr>
+{% for row in r.sensitivity.rows %}<tr><th>{{ row.cfads_change|pct }}</th>{% for c in row.cells %}<td class="{{ 'below' if c.dscr_minimum and (c.dscr_minimum|float) < 1.0 else '' }}">{{ c.dscr_minimum|ratio if c.dscr_minimum else 'n/c' }}</td>{% endfor %}</tr>{% endfor %}</table>
+<p class="small muted">{{ r.sensitivity.note }}</p>
+<h3>Annual debt service by loan year (balloon excluded)</h3>
+<table><tr>{% for y, v in r.annual_debt_service_by_year.items() %}<th>Year {{ y }}</th>{% endfor %}</tr><tr>{% for y, v in r.annual_debt_service_by_year.items() %}<td class="num">{{ v|money }}</td>{% endfor %}</tr></table>
+<details><summary>Full payment schedule ({{ r.schedule|length }} payments)</summary>
+<table><tr><th>#</th><th>Month</th><th>Rate</th><th class="num">Payment</th><th class="num">Interest</th><th class="num">Principal</th><th class="num">Balance</th><th>Type</th></tr>
+{% for x in r.schedule %}<tr><td>{{ x.seq }}</td><td>{{ x.month }}</td><td>{{ x.rate|rate }}</td><td class="num">{{ x.payment|money(2) }}</td><td class="num">{{ x.interest|money(2) }}</td><td class="num">{{ x.principal|money(2) }}</td><td class="num">{{ x.balance|money(2) }}</td><td class="small">{{ x.kind }}</td></tr>{% endfor %}</table></details>
+{% endblock %}

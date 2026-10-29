@@ -1,55 +1,53 @@
 # Milestone status, known limitations, unfinished features
 
-Test run at time of writing: **160 passed, 2 skipped** (`pytest -q`, Python 3.13, Linux, Tesseract 5.3.4).
-The 2 skipped tests are the opt-in live-Ollama tests (no Ollama/GPU in the build environment).
-The PowerShell scripts were written for Windows but **not executed** in the build environment (Linux).
+Latest test run: **222 passed, 2 skipped** (`pytest`, Python 3.13 on Linux, Tesseract 5.3.4). The 2 skipped tests are
+the opt-in live-Ollama tests (no Ollama/GPU in the build environment). The PowerShell scripts were written for
+Windows but have **not been executed** on Windows by the author.
 
-## Milestone 1 — foundation ✅
-Works: project layout, settings with loopback/cloud validation, SQLite schema + checksum migrations, case/borrower/
-terms (revisioned)/parties, deterministic metrics, versioned illustrative policies, dashboard and case pages, CLI.
-Tested: money parsing/rounding, payment math (known answers), DSCR/LTV/LTC/leverage/liquidity/margins/global DSCR,
-annual vs monthly/quarterly payments, zero/negative/missing/invalid inputs, boundaries with rounding, reproducibility,
-migrations, foreign keys, transaction rollback, SQL injection inertness.
+## Phase 1 — underwriting workbench (milestones 1–5) ✅
+Foundation, local AI extraction (mock-tested), documents/OCR/evidence, full deterministic analysis, reports and
+hardening. See git history and the test files `test_metrics.py`, `test_policy.py`, `test_documents.py`, `test_llm.py`,
+`test_underwriting_runs.py`, `test_web.py`, etc.
 
-## Milestone 2 — local AI ✅ (mock-tested; live test opt-in)
-Works: Ollama connectivity/version, local-model and cloud-model checks, structured JSON-schema extraction,
-model/digest/prompt-version recording, timeouts, retries on malformed JSON, background extraction from the UI.
-Tested with a fake in-process Ollama: unavailable, timeout, missing model, cloud model refused, non-loopback URL
-refused, proxy env ignored, redirects refused, malformed JSON, unknown fields, extra keys, hallucinated values,
-re-extraction de-duplication. **Not yet run against a real model** — run `scripts\run_tests.ps1 -Ollama`.
+## Phase 2 — full loan lifecycle
 
-## Milestone 3 — documents and evidence ✅
-Works: PyMuPDF text, scanned-page detection, Tesseract OCR, page images next to text, SHA-256 de-duplication across
-cases, password-protected/malformed/oversized/unsupported handling, injection flagging, verify/correct/reject with
-history, contradiction detection and documented resolution.
-
-## Milestone 4 — full analysis ✅
-Works: base-period selection + annualization flags, balance-sheet date matching, EBITDA add-backs, existing debt
-schedule with frequencies/refinance exclusion, proposed debt schedule, CRE NOI/property DSCR/debt yield, collateral
-advance rates, break-even, scenario runs (no base mutation), sensitivity grid, run comparison, policy exceptions.
-
-## Milestone 5 — reports and hardening ✅
-Works: versioned HTML/PDF reports with formulas, inputs, sources, unverified/contradiction sections, risks and
-follow-up questions derived from rules, optional labelled and number-checked narrative; audit log; backup/restore
-with checksums; case purge; CSRF/Origin/Host/CSP; git hook; Windows scripts.
+| Step | Status | Verified by |
+|---|---|---|
+| Inspect project, run baseline tests | ✅ 160 passed before changes | — |
+| Repair foundations | ✅ policy registration bypassed the audit chain (fixed); policy resolution now honours effective dates | `test_memo_migrations.py` |
+| Lifecycle stages + migrations 0002–0006 | ✅ | `test_lifecycle.py`, migration upgrade test |
+| Credit memo generator (HTML/PDF, versions, reproducibility) | ✅ | `test_memo_migrations.py` |
+| Loan structuring simulator | ✅ | `test_structuring.py` |
+| Due diligence & conditions | ✅ | `test_conditions_closing.py` |
+| Human credit decisions, approved/executed terms, closing, funding | ✅ | `test_conditions_closing.py`, `test_lifecycle.py` |
+| Servicing: schedules, payments, CSV, delinquency, modifications | ✅ | `test_servicing.py` |
+| Covenants, monitoring alerts, portfolio | ✅ | `test_servicing.py` |
+| UI integration (all pages) | ✅ | `test_web_lifecycle.py` drives the whole lifecycle through the web forms; screenshots reviewed in a real browser |
+| Audit chain, security checks | ✅ | tamper and purge tests; CSRF/Host/Origin tests from phase 1 still pass |
+| Documentation | ✅ | README, LIFECYCLE.md, SERVICING.md, ARCHITECTURE.md, SECURITY.md |
 
 ## Known limitations
-* Extraction quality depends on the local model; small models misread tables. Every value needs human verification.
-* Extraction processes text, not table structure; multi-column statements (e.g. two years side by side) rely on
-  the model assigning the right period — check periods carefully.
-* One borrower entity per case; no consolidation of affiliates or multiple business tax returns.
-* Global cash flow uses entered guarantor totals; it does not parse personal tax returns or K-1s.
-* Annualization is linear (no seasonality); TTM construction from interim statements is manual.
-* Collateral advance rates and all thresholds are policy parameters (illustrative in the demo).
-* No built-in encryption at rest (use BitLocker/VeraCrypt), no multi-user accounts or authentication.
-* PDF report layout is generated by PyMuPDF Story (basic HTML/CSS subset).
-* Contradiction tolerance is fixed at $1.00 (`analysis/resolver.py: CONFLICT_ABS_TOLERANCE`).
+* **Single local user.** "Decided by", "approved by" and "confirmed by" are typed names, not authenticated identities.
+  Anyone using your Windows account can act as anyone. This is not a multi-user lending platform.
+* **Strict re-underwriting.** Any material change after a decision (including a new collateral valuation received
+  during due diligence) makes the run stale and requires a new run and a new human decision before advancing.
+* **Servicing math simplifications:** nominal periodic rates (no actual/360 or daily accrual), schedule-based interest
+  even after prepayments, no rate floors/caps, no automatic late fees, no escrow, no payoff quotes with per-diem
+  interest, no arrears capitalization in modifications, variable rates handled by recording rate-change modifications.
+* Payment dates are calendar dates without business-day adjustment.
+* Covenant tests use annual verified underwriting runs or manual values; there is no automatic interim-statement
+  spreading for quarterly covenants.
+* Credit memos list strengths/mitigants only from rule results (≥ 20 % margin); industry and market content appears
+  only as labelled analyst commentary. Template changes after an upgrade may change re-rendered HTML (the stored
+  context is the reproducibility anchor).
+* Closing checklists are illustrative policy content, not legal advice; no document drafting is provided.
+* Phase-1 limitations still apply: extraction quality depends on the local model; no built-in encryption at rest;
+  one borrower entity per case; contradiction tolerance fixed at $1.00.
 
 ## Unfinished / future features
-* SBA 7(a)/504 and private/hard-money modules (need sourced, versioned program requirements).
-* Table-aware extraction (PyMuPDF `find_tables`) and per-column period mapping.
-* Bank-statement analytics (deposit trends, NSFs) — field exists as informational only.
-* AR/AP aging analytics and borrowing-base calculations for working-capital lines.
-* Multi-year trend analysis and projections vs. actuals.
-* Policy editor UI (policies are edited as YAML files today).
-* Packaged Windows installer (currently venv + scripts).
+* SBA 7(a)/504 and private/hard-money modules with sourced, versioned program requirements.
+* Daily-accrual servicing, payoff statements, escrow, automated late-fee rules, arrears capitalization.
+* Borrowing-base monitoring for revolving lines; AR/AP aging analytics.
+* Quarterly covenant spreading from interim statements; multi-year trend charts.
+* Policy editor UI (policies are YAML files).
+* Packaged Windows installer.

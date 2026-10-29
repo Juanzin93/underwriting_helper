@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Structuring · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="info-box">Compare alternative loan structures. Calculations are deterministic (nominal periodic rate, cent rounding) and are
+<b>planning estimates, not lender quotes</b>. Structures never change the requested terms, underwriting runs, approved or executed terms.
+DSCR uses CFADS and existing debt service from the latest verified run ({{ run_state.reason }}).</div>
+
+<div class="actions"><form method="post" action="/cases/{{ case.id }}/structuring/baseline" class="inline">{{ csrf() }}<button class="secondary">Create baseline from requested terms</button></form>
+<a href="?archived={{ '0' if show_archived else '1' }}">{{ 'Hide' if show_archived else 'Show' }} archived</a></div>
+
+{% if structures %}
+<h2>Side-by-side comparison</h2>
+<div style="overflow-x:auto"><table>
+<tr><th>Metric</th>{% for s in structures %}<th class="num"><a href="/cases/{{ case.id }}/structuring/{{ s.id }}">{{ s.name }}</a><br><span class="small">{{ 'BASELINE' if s.is_baseline else s.status|upper }}</span></th>{% endfor %}</tr>
+<tr><td>Inputs</td>{% for s in structures %}<td class="small num">{{ s.inputs.principal|money }} @ {{ s.inputs.annual_rate|rate }} {{ s.inputs.rate_type }}<br>term {{ s.inputs.term_months }} / amort {{ s.inputs.amortization_months }} / IO {{ s.inputs.interest_only_months }} mo, {{ s.inputs.payment_frequency }}</td>{% endfor %}</tr>
+{% for row in comparison %}<tr><td>{{ row.label }}</td>{% for c in row.cells %}<td class="num">{{ c.value|fmtval(row.unit) if c.value is not none else 'n/a' }}{% if c.delta %}<br><span class="small muted">Δ vs baseline {{ '+' if not c.delta.startswith('-') else '' }}{{ c.delta|fmtval(row.unit) }}</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
+<tr><td>Policy checks (screening)</td>{% for s in structures %}<td class="small">{% for p in s.results.policy_checks %}<span class="res {{ p.result|result_class }}">{{ p.rule_id }}: {{ p.result }}</span> {% endfor %}</td>{% endfor %}</tr>
+<tr><td>Actions</td>{% for s in structures %}<td class="small">{% for st in ['proposed','draft','archived'] if st != s.status %}<form method="post" action="/cases/{{ case.id }}/structuring/{{ s.id }}/{{ st }}" class="inline">{{ csrf() }}<button class="small secondary">Mark {{ st }}</button></form> {% endfor %}
+<form method="post" action="/cases/{{ case.id }}/structuring/{{ s.id }}/recalculate" class="inline">{{ csrf() }}<button class="small secondary">Recalculate</button></form>
+{% if case.stage in ('CREDIT_REVIEW','STRUCTURING') %}<a href="/cases/{{ case.id }}/decision?from_structure={{ s.id }}">Use for decision/approved terms →</a>{% endif %}</td>{% endfor %}</tr>
+</table></div>
+{% else %}<p class="muted">No structures yet.</p>{% endif %}
+
+<div class="panel"><h2 style="margin-top:0">New structure</h2>
+<form method="post" action="/cases/{{ case.id }}/structuring">{{ csrf() }}
+{% set t = case.terms or {} %}
+<div class="row"><div><label>Name *</label><input type="text" name="name" required></div><div style="flex:2 1 300px"><label>Description</label><input type="text" name="description"></div></div>
+<div class="row">
+<div><label>Proposed principal ($) *</label><input type="text" name="principal" required value="{{ t.requested_amount or '' }}"></div>
+<div><label>Annual rate (%) *</label><input type="text" name="annual_rate" required value="{{ (t.interest_rate|rate).rstrip('%') if t.interest_rate else '' }}"></div>
+<div><label>Rate type</label><select name="rate_type"><option value="fixed">Fixed</option><option value="variable">Variable</option></select></div>
+<div><label>Variable-rate path (month:rate%, …)</label><input type="text" name="rate_steps" placeholder="25:9.5, 49:10.25"></div>
+</div>
+<div class="row">
+<div><label>Term (months) *</label><input type="number" name="term_months" min="1" max="600" required value="{{ t.term_months or '' }}"></div>
+<div><label>Amortization after IO (months) *</label><input type="number" name="amortization_months" min="1" max="600" required value="{{ t.amortization_months or '' }}"></div>
+<div><label>Interest-only (months)</label><input type="number" name="interest_only_months" min="0" value="0"></div>
+<div><label>Payment frequency</label><select name="payment_frequency">{% for f in ['monthly','quarterly','semiannual','annual'] %}<option>{{ f }}</option>{% endfor %}</select></div>
+</div>
+<div class="row">
+<div><label>Origination fee ($)</label><input type="text" name="origination_fee" value="0"></div>
+<div><label>Other financing costs ($)</label><input type="text" name="other_costs" value="0"></div>
+<div><label class="check"><input type="checkbox" name="fees_financed"> Fees financed (added to principal)</label></div>
+<div><label>Collateral value override ($)</label><input type="text" name="collateral_value" placeholder="default: verified run"></div>
+<div><label>Project cost override ($)</label><input type="text" name="project_cost" value="{{ t.project_total_cost or '' }}"></div>
+</div>
+<div class="row">
+<div><label>Cash flow source</label><select name="cfads_source"><option value="run">Latest verified run (CFADS)</option><option value="manual">Manual assumption</option></select></div>
+<div><label>Manual CFADS ($/yr)</label><input type="text" name="cfads_manual"></div>
+<div><label>Manual existing debt service ($/yr)</label><input type="text" name="existing_debt_service_manual"></div>
+</div>
+<p><button type="submit">Save &amp; calculate</button></p></form></div>
+{% endblock %}

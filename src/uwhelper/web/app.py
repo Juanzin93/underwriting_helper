@@ -97,9 +97,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityMiddleware)
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
-    from uwhelper.web.routes import analysis, cases, documents, facts, reports, system
+    from uwhelper.web.routes import analysis, cases, documents, facts, lifecycle, reports, servicing, system
 
-    for module in (cases, documents, facts, analysis, reports, system):
+    for module in (cases, documents, facts, analysis, reports, system, lifecycle, servicing):
         app.include_router(module.router)
 
     from uwhelper.repo.cases import NotFound, ValidationFailure

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Workflow · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="panel">
+<h2 style="margin-top:0">Loan lifecycle</h2>
+<div class="pipeline" aria-label="Lifecycle stages">
+{% set idx = pipeline.index(case.stage) if case.stage in pipeline else -1 %}
+{% for s in pipeline %}<span class="{{ 'current' if s == case.stage else ('done' if idx > loop.index0 else '') }}">{{ '✔ ' if idx > loop.index0 else ('● ' if s == case.stage else '') }}{{ labels[s] }}</span>{% endfor %}
+{% if case.stage in exception_stages %}<span class="current">{{ labels[case.stage] }}</span>{% endif %}
+</div>
+<p class="small">Underwriting: {{ run_state.reason }}</p>
+<p class="small muted">Forward moves are checked. <b>✖ Hard blockers</b> must be resolved. <b>⚠ Soft items</b> can be overridden only with a documented
+reason (≥ 20 characters), which is stored with the list of overridden items. Funding and servicing are entered from their own confirmation pages.</p>
+</div>
+
+<h2>Available actions</h2>
+{% for a in actions if a.forward or a.to_stage == 'RESUME' %}
+<div class="panel">
+<b>{{ a.label }}</b>
+{% if a.blockers %}<ul>{% for b in a.blockers %}<li class="{{ 'blocker-hard' if b.hard else 'blocker-soft' }}">{{ '✖ BLOCKER' if b.hard else '⚠ To resolve or override' }}: {{ b.message }}{% if b.link %} — <a href="{{ b.link }}">go</a>{% endif %}</li>{% endfor %}</ul>
+{% elif a.forward %}<p class="small">✔ All checks satisfied.</p>{% endif %}
+{% if not a.hard_blocked %}
+<form method="post" action="/cases/{{ case.id }}/workflow/transition" data-confirm="{{ a.label }}?">{{ csrf() }}
+<input type="hidden" name="to_stage" value="{{ a.to_stage }}">
+<div class="row"><div style="flex:3 1 300px"><label>Reason (required)</label><input type="text" name="reason" required minlength="10" placeholder="Why is this move appropriate now?"></div></div>
+{% if a.soft_only %}<label class="check"><input type="checkbox" name="override"> Override the ⚠ items above with this documented reason</label>{% endif %}
+<p><button type="submit" class="{{ '' if a.forward else 'secondary' }}">{{ a.label }}</button></p>
+</form>
+{% endif %}
+</div>
+{% else %}<p class="muted">No forward transitions available from this stage.{% if case.stage == 'CLOSING' %} Use <a href="/cases/{{ case.id }}/funding">Funding confirmation</a>.{% elif case.stage == 'FUNDED' %} Open the <a href="/cases/{{ case.id }}/servicing">servicing account</a>.{% endif %}</p>{% endfor %}
+
+{% set others = actions|rejectattr('forward')|rejectattr('to_stage','equalto','RESUME')|list %}
+{% if others %}<details class="panel"><summary>Other moves: back to an earlier stage, hold, withdraw, cancel ({{ others|length }})</summary>
+{% for a in others %}<form method="post" action="/cases/{{ case.id }}/workflow/transition" class="actions" data-confirm="{{ a.label }}?">{{ csrf() }}
+<input type="hidden" name="to_stage" value="{{ a.to_stage }}"><input type="text" name="reason" required minlength="10" placeholder="Reason (required)" style="min-width:420px">
+<button class="small secondary">{{ a.label }}</button></form>{% endfor %}</details>{% endif %}
+
+<h2>Transition history</h2>
+<table><tr><th>When (UTC)</th><th>From</th><th>To</th><th>Reason</th><th>Override</th><th>By</th></tr>
+{% for h in history|reverse %}<tr><td class="small">{{ h.occurred_at }}</td><td>{{ labels.get(h.from_stage, '—') if h.from_stage else '—' }}</td><td><b>{{ labels.get(h.to_stage, h.to_stage) }}</b></td><td class="small">{{ h.reason }}</td>
+<td class="small">{% if h.is_override %}<span class="badge unverified">OVERRIDE</span> {% for b in h.blockers %}{{ b.code }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</td><td class="small">{{ h.actor }}</td></tr>{% endfor %}
+</table>
+{% endblock %}

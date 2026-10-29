@@ -331,7 +331,7 @@ def compare(structures: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for s in structures:
             v = s["results"].get(key)
             delta = None
-            if v is not None and bval is not None and s is not base:
+            if v is not None and bval is not None and s is not base and Decimal(v) != Decimal(bval):
                 delta = dstr(Decimal(v) - Decimal(bval))
             cells.append({"value": v, "delta": delta})
         rows.append({"key": key, "label": label, "unit": unit, "cells": cells})

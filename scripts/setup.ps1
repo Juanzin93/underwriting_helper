@@ -70,3 +70,4 @@ if (-not $SkipTests) { & $VenvPy -m pytest -q }
 
 & $VenvPy -m uwhelper doctor
 Write-Host "`nSetup complete. Start the app with:  scripts\start.ps1" -ForegroundColor Cyan
+Write-Host "Optional fictional demo data:  .\.venv\Scripts\python -m uwhelper load-lifecycle-demo"

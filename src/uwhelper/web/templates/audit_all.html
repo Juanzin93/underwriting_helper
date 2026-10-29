@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+<h1>Audit log (all cases)</h1>
+<div class="{{ 'info-box' if chain.ok else 'danger-box' }}"><b>Hash chain: {{ 'intact' if chain.ok else 'PROBLEMS FOUND' }}</b> — {{ chain.checked }} events checked,
+{{ chain.purged_placeholders }} purged placeholders. Head hash <span class="mono">{{ chain.head }}</span>.
+{% for p in chain.problems %}<br>{{ p }}{% endfor %}
+<br><span class="small">Tamper-evident, not tamper-proof: someone with write access to the database file could rewrite the whole chain.
+Write the head hash down periodically to detect that.</span></div>
+<table><tr><th>When (UTC)</th><th>Case</th><th>Action</th><th>Entity</th><th>Details</th><th>Hash</th></tr>
+{% for e in events %}<tr><td class="small">{{ e.occurred_at }}</td><td class="small">{% if e.case_id %}<a href="/cases/{{ e.case_id }}/audit">{{ e.case_id[:8] }}</a>{% else %}—{% endif %}</td><td>{{ e.action.replace('_',' ') }}</td><td class="small">{{ e.entity_type }}</td>
+<td class="small mono">{% for k, v in e.details.items() %}{{ k }}={{ v }}{% if not loop.last %}; {% endif %}{% endfor %}</td><td class="mono small">{{ (e.event_hash or '')[:10] }}</td></tr>{% endfor %}</table>
+{% endblock %}

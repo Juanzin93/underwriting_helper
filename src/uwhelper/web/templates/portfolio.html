@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Portfolio{% endblock %}
+{% block content %}
+<h1>Portfolio overview <span class="small muted">as of {{ p.as_of }}</span></h1>
+<div class="kpi">
+<div><b>{{ p.totals.accounts }}</b><span>active serviced loans</span></div>
+<div><b>{{ p.totals.outstanding|money }}</b><span>outstanding principal (funded {{ p.totals.funded|money }})</span></div>
+<div><b>{{ p.totals.past_due|money(2) }}</b><span>past due (recorded payments only)</span></div>
+<div><b>{{ p.totals.delinquent }}</b><span>loans beyond grace period</span></div>
+</div>
+<h2>Exposure by loan type</h2>
+<table><tr><th>Loan type</th><th class="num">Outstanding</th><th class="num">Share</th></tr>{% for k, v in p.by_type.items() %}<tr><td>{{ k.replace('_',' ') }}</td><td class="num">{{ v|money }}</td><td class="num">{{ p.share[k]|pct }}</td></tr>{% else %}<tr><td colspan="3" class="muted">No serviced loans.</td></tr>{% endfor %}</table>
+<h2>Loans</h2>
+<table><tr><th>Loan</th><th>Borrower</th><th class="num">Outstanding</th><th>Next due</th><th class="num">Past due</th><th>Delinquency</th><th>Maturity</th><th>Covenants</th><th>Alerts</th></tr>
+{% for r in p.rows %}{% set st = r.state %}<tr><td><a href="/cases/{{ r.account.case_id }}/servicing">{{ r.account.loan_number }}</a><br><span class="small">{{ r.account.status }}</span></td><td>{{ r.account.legal_name }}</td>
+<td class="num">{{ st.outstanding_principal|money }}</td><td class="small">{{ st.next_due.due_date if st.next_due else '—' }}</td><td class="num">{{ st.past_due_amount|money(2) }}</td>
+<td>{% if st.delinquency in ('CURRENT','WITHIN_GRACE') %}{{ st.delinquency.replace('_',' ') }}{% else %}<span class="badge conflict">{{ st.delinquency.replace('_',' ') }}</span>{% endif %}</td>
+<td class="small">{{ st.maturity_date }}{% if st.balloon %}<br>balloon {{ st.balloon.payment|money }}{% endif %}</td>
+<td class="small">{% for c in r.covenants %}{{ c.code }}: {{ c.latest.result if c.latest else 'untested' }}{% if c.missing %} (missing {{ c.missing|length }}){% endif %}<br>{% else %}—{% endfor %}</td>
+<td class="small">{% for a in r.alerts %}<b>{{ a.rule }}</b><br>{% else %}—{% endfor %}</td></tr>
+{% else %}<tr><td colspan="9" class="muted">No serviced loans yet.</td></tr>{% endfor %}</table>
+<h2>Payments due in the next 30 days</h2>
+<table><tr><th>Due</th><th>Loan</th><th class="num">Amount remaining</th></tr>{% for u in p.upcoming %}<tr><td>{{ u.due_date }}</td><td><a href="/cases/{{ u.case_id }}/servicing">{{ u.loan_number }}</a></td><td class="num">{{ u.amount|money(2) }}</td></tr>{% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}</table>
+<h2>Attention list (rule-based)</h2>
+<ul>{% for r in p.rows %}{% for a in r.alerts %}<li><a href="/cases/{{ r.account.case_id }}/servicing">{{ r.account.loan_number }}</a> — <b>{{ a.rule }}</b>: {{ a.message }}</li>{% endfor %}{% endfor %}</ul>
+{% endblock %}

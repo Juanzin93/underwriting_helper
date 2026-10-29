@@ -71,12 +71,39 @@ def cmd_load_sample(args, settings) -> int:
     return 0
 
 
+def cmd_load_lifecycle_demo(args, settings) -> int:
+    from uwhelper.bootstrap import initialise
+    from uwhelper.sample_lifecycle import load_lifecycle_demo
+
+    db, _ = initialise(settings)
+    with db.session() as conn:
+        created = load_lifecycle_demo(conn, settings)
+    print("Loaded fictional demo cases (one per stage, all SYNTHETIC):")
+    for stage, cid in created.items():
+        print(f"  {stage:<14} {cid}")
+    return 0
+
+
 def cmd_sample_pdfs(args, settings) -> int:
     from uwhelper.sample_data import write_sample_pdfs
 
     for p in write_sample_pdfs(Path(args.out)):
         print(p)
     return 0
+
+
+def cmd_verify_audit(args, settings) -> int:
+    from uwhelper.bootstrap import initialise
+    from uwhelper.repo.audit import verify_chain
+
+    db, _ = initialise(settings)
+    with db.session() as conn:
+        v = verify_chain(conn)
+    print(f"Audit chain {'INTACT' if v['ok'] else 'PROBLEMS FOUND'}: {v['checked']} events, "
+          f"{v['purged_placeholders']} purged placeholders. Head hash: {v['head']}")
+    for p in v["problems"]:
+        print("  " + p)
+    return 0 if v["ok"] else 1
 
 
 def cmd_backup(args, settings) -> int:
@@ -125,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("doctor", help="Check local-only configuration, Ollama, model and Tesseract")
     p.add_argument("--skip-ollama", action="store_true")
     sub.add_parser("load-sample", help="Load the fictional sample loan case")
+    sub.add_parser("load-lifecycle-demo", help="Load fictional cases at every lifecycle stage, incl. a serviced loan")
+    sub.add_parser("verify-audit", help="Verify the audit log hash chain")
     p = sub.add_parser("sample-pdfs", help="Write the synthetic sample PDFs to a folder")
     p.add_argument("--out", default="samples/generated")
     p = sub.add_parser("backup", help="Write a backup ZIP (database + documents + reports)")
@@ -151,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     _logging(settings)
     handlers = {"serve": cmd_serve, "init": cmd_init, "doctor": cmd_doctor, "load-sample": cmd_load_sample,
+                "load-lifecycle-demo": cmd_load_lifecycle_demo, "verify-audit": cmd_verify_audit,
                 "sample-pdfs": cmd_sample_pdfs, "backup": cmd_backup, "restore": cmd_restore, "extract": cmd_extract}
     try:
         return handlers[args.command](args, settings)

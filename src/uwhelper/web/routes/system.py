@@ -50,6 +50,12 @@ async def reload_policies(request: Request):
 @router.get("/system")
 async def system(request: Request):
     checks = run_checks(request.app.state.settings)
+    from uwhelper.repo.audit import verify_chain
+
+    with get_db(request).session() as conn:
+        chain = verify_chain(conn)
+    checks.append({"name": "Audit log hash chain", "ok": chain["ok"],
+                   "detail": f"{chain['checked']} events; head {chain['head'][:16]}… (tamper-evident, not tamper-proof)"})
     return render(request, "system.html", checks=checks)
 
 

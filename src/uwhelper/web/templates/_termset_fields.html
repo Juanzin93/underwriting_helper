@@ -1,0 +1,18 @@
+{# Inputs for approved / executed terms. Expects `ts` (dict or none). Field names are prefixed with t_. #}
+{% set ts = ts or {} %}
+<div class="row">
+<div><label>Principal ($) *</label><input type="text" name="t_principal" required value="{{ ts.principal or '' }}"></div>
+<div><label>Annual rate (%) *</label><input type="text" name="t_annual_rate" required value="{{ (ts.annual_rate|rate).rstrip('%') if ts.annual_rate else '' }}"></div>
+<div><label>Rate type</label><select name="t_rate_type"><option value="fixed">Fixed</option><option value="variable" {% if ts.rate_type == 'variable' %}selected{% endif %}>Variable</option></select></div>
+<div><label>Index / margin note (variable)</label><input type="text" name="t_rate_index_note" value="{{ ts.rate_index_note or '' }}" placeholder="e.g. Prime + 1.50%, reset annually"></div>
+</div>
+<div class="row">
+<div><label>Term (months) *</label><input type="number" name="t_term_months" min="1" max="600" required value="{{ ts.term_months or '' }}"></div>
+<div><label>Amortization after IO (months) *</label><input type="number" name="t_amortization_months" min="1" max="600" required value="{{ ts.amortization_months or '' }}"></div>
+<div><label>Interest-only (months)</label><input type="number" name="t_interest_only_months" min="0" max="600" value="{{ ts.interest_only_months or 0 }}"></div>
+<div><label>Payment frequency</label><select name="t_payment_frequency">{% for f in ['monthly','quarterly','semiannual','annual'] %}<option {% if ts.payment_frequency == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></div>
+<div><label>Origination fee ($)</label><input type="text" name="t_origination_fee" value="{{ ts.origination_fee or '0' }}"></div>
+<div><label>Other costs ($)</label><input type="text" name="t_other_costs" value="{{ ts.other_costs or '0' }}"></div>
+</div>
+{% if ts_source_id %}<input type="hidden" name="t_source_structure_id" value="{{ ts_source_id }}">{% endif %}
+<label>Notes</label><input type="text" name="t_notes" maxlength="2000">
