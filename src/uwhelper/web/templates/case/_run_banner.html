@@ -1,0 +1,11 @@
+{% if run %}
+<div class="panel status-{{ run.overall_status }}">
+<b>Run #{{ run.run_number }}</b> · {{ run.created_at[:19].replace('T',' ') }} UTC · mode <b>{{ run.mode.replace('_',' ') }}</b>
+{% if run.scenario_name %} · scenario <b>{{ run.scenario_name }}</b>{% endif %} · policy {{ run.policy_key }} v{{ run.policy_version }}{% if run.illustrative %} <span class="badge unverified">ILLUSTRATIVE THRESHOLDS</span>{% endif %}
+· base period {{ run.base_period_label or 'none' }}<br>
+<b>{{ run.overall_status.replace('_',' ') }}</b> — {{ run.summary.overall_status_text }}
+{% if run.mode != 'verified_only' %}<div class="warning-box">Preview run: unverified values were used and flagged. No rule can pass on an unverified value.</div>{% endif %}
+</div>
+{% else %}
+<div class="info-box">No screening run yet. Use <b>▶ Run screening</b> above. Runs are saved permanently and never overwritten.</div>
+{% endif %}

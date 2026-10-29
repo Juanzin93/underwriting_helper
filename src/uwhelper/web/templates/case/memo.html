@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Credit memo · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="info-box">The memo uses only the selected saved run, verified facts, recorded data and your labelled commentary. Its opinion is a
+<b>preliminary analytical opinion</b> derived from rule results — never an approval. Only a human credit decision can approve or decline.</div>
+{% if not runs %}<div class="warning-box">Run a <b>verified-only</b> screening first.</div>{% else %}
+<div class="panel"><h2 style="margin-top:0">Generate a memo version</h2>
+{% if not run_state.current %}<div class="warning-box">{{ run_state.reason }}</div>{% endif %}
+<form method="post" action="/cases/{{ case.id }}/memo">{{ csrf() }}
+<label>Based on underwriting run</label><select name="run_id">{% for r in runs %}<option value="{{ r.id }}">#{{ r.run_number }} — {{ r.created_at[:16] }} — {{ r.overall_status }} — policy v{{ r.policy_version }}</option>{% endfor %}</select>
+<p class="small muted">Optional analyst commentary (shown in the memo labelled ANALYST; do not enter facts you cannot support):</p>
+<label>Executive summary note</label><textarea name="analyst_summary" maxlength="4000"></textarea>
+<label>Business profile</label><textarea name="analyst_business_profile" maxlength="4000"></textarea>
+<label>Industry and business risks (with the evidence you relied on)</label><textarea name="analyst_industry_risks" maxlength="4000"></textarea>
+<label>Mitigating factors</label><textarea name="analyst_mitigants" maxlength="4000"></textarea>
+<label class="check"><input type="checkbox" name="include_pdf" checked> Also produce PDF</label>
+<label class="check"><input type="checkbox" name="include_narrative"> Add a MODEL-GENERATED narrative from the local model (labelled; numbers checked)</label>
+<p><button type="submit">Generate credit memo</button></p></form></div>
+{% endif %}
+<h2>Memo versions</h2>
+{% if memos %}<table><tr><th>Version</th><th>Run</th><th>Preliminary opinion</th><th>Created</th><th>HTML SHA-256</th><th></th></tr>
+{% for mm in memos %}<tr><td>v{{ mm.version }}</td><td>#{{ mm.run_number }}</td><td class="small">{{ mm.opinion_code.replace('_',' ') }}</td><td class="small">{{ mm.created_at }}</td><td class="mono small">{{ mm.html_sha256[:12] }}</td>
+<td class="actions"><a href="/cases/{{ case.id }}/memo/{{ mm.id }}/html" target="_blank" rel="noopener">HTML</a>{% if mm.pdf_file %} · <a href="/cases/{{ case.id }}/memo/{{ mm.id }}/pdf?inline=1" target="_blank" rel="noopener">PDF</a>{% endif %}
+<form method="get" action="/cases/{{ case.id }}/memo/{{ mm.id }}/verify" class="inline"><button class="small secondary">Verify reproducibility</button></form></td></tr>{% endfor %}</table>
+{% else %}<p class="muted">No memos yet.</p>{% endif %}
+{% endblock %}

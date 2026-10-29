@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit case" if case else "New loan case" }}{% endblock %}
+{% block content %}
+<h1>{{ "Edit " ~ case.case_number if case else "New loan case" }}</h1>
+<form method="post" action="{{ '/cases/' ~ case.id ~ '/edit' if case else '/cases' }}" class="panel">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<h2>Case</h2>
+<div class="row">
+<div><label for="title">Case title *</label><input type="text" id="title" name="title" required maxlength="200" value="{{ case.title if case else '' }}"></div>
+<div><label for="loan_type">Loan type *</label><select id="loan_type" name="loan_type">
+{% for key, lt in loan_types.items() %}<option value="{{ key }}" {% if case and case.loan_type == key %}selected{% endif %} {% if not lt.implemented %}disabled{% endif %}>{{ lt.label }}</option>{% endfor %}
+</select></div>
+<div><label for="policy_key">Policy</label><select id="policy_key" name="policy_key"><option value="">Default for loan type</option>
+{% set seen = [] %}{% for p in policies %}{% if p.policy_key not in seen %}{% set _ = seen.append(p.policy_key) %}<option value="{{ p.policy_key }}" {% if case and case.policy_key == p.policy_key %}selected{% endif %}>{{ p.name }} ({{ p.policy_key }}){% if p.illustrative %} — illustrative{% endif %}</option>{% endif %}{% endfor %}
+</select></div>
+{% if case %}<div><label for="policy_version">Pin policy version (blank = latest)</label><input type="text" id="policy_version" name="policy_version" value="{{ case.policy_version or '' }}" placeholder="e.g. 1.0.0"></div>{% endif %}
+</div>
+<label for="notes">Notes</label><textarea id="notes" name="notes" maxlength="5000">{{ case.notes or '' if case else '' }}</textarea>
+
+<h2>Borrower</h2>
+{% set b = case.borrower if case else {} %}
+<div class="row">
+<div><label for="b_legal_name">Legal name *</label><input type="text" id="b_legal_name" name="b_legal_name" required value="{{ b.legal_name or '' }}"></div>
+<div><label for="b_dba_name">DBA</label><input type="text" id="b_dba_name" name="b_dba_name" value="{{ b.dba_name or '' }}"></div>
+<div><label for="b_entity_type">Entity type</label><input type="text" id="b_entity_type" name="b_entity_type" value="{{ b.entity_type or '' }}" placeholder="LLC, S corp, C corp…"></div>
+</div>
+<div class="row">
+<div><label for="b_industry">Industry</label><input type="text" id="b_industry" name="b_industry" value="{{ b.industry or '' }}"></div>
+<div><label for="b_naics_code">NAICS code</label><input type="text" id="b_naics_code" name="b_naics_code" value="{{ b.naics_code or '' }}"></div>
+<div><label for="b_state_of_formation">State of formation</label><input type="text" id="b_state_of_formation" name="b_state_of_formation" value="{{ b.state_of_formation or '' }}"></div>
+<div><label for="b_year_established">Year established</label><input type="number" id="b_year_established" name="b_year_established" value="{{ b.year_established or '' }}"></div>
+</div>
+{% if not case %}
+<h2>Proposed loan terms <span class="small muted">(optional now; editable later — each edit is kept as a revision)</span></h2>
+{% set prefix = "t_" %}{% include "_terms_fields.html" %}
+{% endif %}
+<p style="margin-top:14px"><button type="submit">{{ "Save changes" if case else "Create case" }}</button>
+<a class="btn secondary" href="{{ '/cases/' ~ case.id if case else '/' }}">Cancel</a></p>
+</form>
+{% endblock %}

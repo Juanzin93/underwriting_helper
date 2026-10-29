@@ -1,0 +1,21 @@
+{% macro fact_badges(f) -%}
+<span class="badge {{ f.status }}">{% if f.status == 'verified' %}✔ VERIFIED{% elif f.status == 'candidate' %}⚠ UNVERIFIED{% elif f.status == 'rejected' %}✖ REJECTED{% else %}SUPERSEDED{% endif %}</span>
+{%- if f.source_type == 'extracted' %}<span class="badge ai" title="Candidate produced by the local model; untrusted until verified">AI-EXTRACTED</span>
+{%- elif f.source_type == 'user_corrected' %}<span class="badge user">USER-CORRECTED</span>
+{%- else %}<span class="badge user">USER-ENTERED</span>{% endif %}
+{%- if f.in_conflict %}<span class="badge conflict">≠ CONFLICT</span>{% endif %}
+{%- if f.evidence_check and f.evidence_check.page_injection_suspected %}<span class="badge conflict" title="The source page contains text resembling instructions to an AI">PAGE HAS SUSPICIOUS INSTRUCTIONS</span>{% endif %}
+{%- endmacro %}
+
+{% macro source_ref(f, case_id) -%}
+{% if f.document_id %}<a href="/cases/{{ case_id }}/documents/{{ f.document_id }}?page={{ f.page_number or 1 }}">{{ f.original_filename or 'document' }}{% if f.page_number %}, p.{{ f.page_number }}{% endif %}</a>{% else %}<span class="muted">no document reference</span>{% endif %}
+{%- endmacro %}
+
+{% macro result(r) -%}<span class="res {{ r|result_class }}">{{ r|result_label }}</span>{%- endmacro %}
+
+{% macro metric_value(m) -%}
+{% if m.status == 'computed' %}<b>{{ m.value|fmtval(m.unit) }}</b>{% elif m.status == 'not_applicable' %}<span class="muted">N/A</span>{% elif m.status == 'not_meaningful' %}<span class="res res-review">Not meaningful</span>{% else %}<span class="res res-unknown">Not calculated</span>{% endif %}
+{% for fl in m.flags %}{% if fl != 'derived' %}<span class="badge {{ 'unverified' if fl in ('unverified','annualized','stale','estimate') else '' }}">{{ fl|flag_label }}</span>{% endif %}{% endfor %}
+{%- endmacro %}
+
+{% macro csrf() -%}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{%- endmacro %}

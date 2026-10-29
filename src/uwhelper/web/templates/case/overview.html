@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="kpi">
+<div><b>{{ pending_facts }}</b><span>unverified fact(s) awaiting review</span></div>
+<div><b>{{ contradiction_count }}</b><span>unresolved contradiction(s)</span></div>
+<div><b>{{ missing_count }}</b><span>checklist item(s) missing/unverified</span></div>
+<div><b>{{ case.terms.requested_amount|money if case.terms else '—' }}</b><span>requested (terms rev. {{ case.terms.revision if case.terms else '—' }})</span></div>
+</div>
+{% if pending_facts or contradiction_count or missing_count %}
+<div class="warning-box">Information is incomplete or unverified. Screening results will show <b>UNKNOWN</b> or <b>REVIEW</b> until it is resolved —
+see <a href="/cases/{{ case.id }}/review">Extraction review</a>, <a href="/cases/{{ case.id }}/contradictions">Contradictions</a> and <a href="/cases/{{ case.id }}/missing">Missing info</a>.</div>
+{% endif %}
+<div class="grid2">
+<div class="panel">
+<h2 style="margin-top:0">Borrower</h2>
+<table>
+<tr><th>Legal name</th><td>{{ case.borrower.legal_name }}</td></tr>
+<tr><th>DBA</th><td>{{ case.borrower.dba_name or '—' }}</td></tr>
+<tr><th>Entity type</th><td>{{ case.borrower.entity_type or '—' }}</td></tr>
+<tr><th>Industry / NAICS</th><td>{{ case.borrower.industry or '—' }} {{ case.borrower.naics_code or '' }}</td></tr>
+<tr><th>Established</th><td>{{ case.borrower.year_established or '—' }} {{ case.borrower.state_of_formation or '' }}</td></tr>
+<tr><th>Organization</th><td>{% if borrower_org %}<a href="/organizations/{{ borrower_org.id }}">{{ borrower_org.name }}</a>{% else %}—{% endif %}</td></tr>
+<tr><th>Deal</th><td>{% if deal %}<a href="/deals/{{ deal.id }}">{{ deal.deal_number }}</a> ({{ deal.status.replace('_',' ') }}){% else %}<span class="muted">Not linked — link it from a deal page.</span>{% endif %}</td></tr>
+</table>
+<p class="actions"><a class="btn secondary small" href="/cases/{{ case.id }}/edit">Edit case &amp; borrower</a>
+<form method="post" action="/cases/{{ case.id }}/status" class="inline actions">{{ csrf() }}
+<select name="status" aria-label="Case status">{% for s in ['open','in_review','archived'] %}<option value="{{ s }}" {% if case.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+<button class="small secondary" type="submit">Set status</button></form>
+<a class="btn danger small" href="/cases/{{ case.id }}/delete">Delete case…</a></p>
+{% if case.notes %}<p class="small">{{ case.notes }}</p>{% endif %}
+</div>
+<div class="panel">
+<h2 style="margin-top:0">Owners &amp; guarantors</h2>
+{% if parties %}<table><tr><th>Name</th><th>Type</th><th>Ownership</th><th>Guarantee</th><th>Contact</th><th></th></tr>
+{% for p in parties %}<tr><td>{{ p.name }}</td><td>{{ p.party_type }}</td><td>{{ (p.ownership_pct ~ '%') if p.ownership_pct else '—' }}</td><td>{{ p.guarantee_type }}</td>
+<td class="small">{% if p.contact_id and party_contacts.get(p.contact_id) %}<a href="/contacts/{{ p.contact_id }}">{{ party_contacts[p.contact_id].first_name }} {{ party_contacts[p.contact_id].last_name }}</a>
+{% elif p.party_type == 'individual' %}<form method="post" action="/cases/{{ case.id }}/parties/{{ p.id }}/contact" class="inline">{{ csrf() }}<select name="contact_id" aria-label="Contact for {{ p.name }}"><option value="__new__">Create from name</option>{% for c in all_contacts %}<option value="{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</option>{% endfor %}</select><button class="small secondary">Link</button></form>{% else %}—{% endif %}</td>
+<td><form method="post" action="/cases/{{ case.id }}/parties/{{ p.id }}/delete" class="inline" data-confirm="Remove this party and their personal financial facts?">{{ csrf() }}<button class="small secondary">Remove</button></form></td></tr>{% endfor %}
+</table>{% else %}<p class="muted">None recorded.</p>{% endif %}
+<details><summary>Add owner / guarantor</summary>
+<form method="post" action="/cases/{{ case.id }}/parties">{{ csrf() }}
+<div class="row"><div><label>Name *</label><input type="text" name="name" required></div>
+<div><label>Type</label><select name="party_type"><option value="individual">Individual</option><option value="entity">Entity</option></select></div>
+<div><label>Ownership %</label><input type="text" name="ownership_pct" placeholder="51"></div></div>
+<div class="row"><div><label class="check"><input type="checkbox" name="is_guarantor"> Guarantor</label></div>
+<div><label>Guarantee type</label><select name="guarantee_type"><option value="unlimited">Unlimited</option><option value="limited">Limited</option></select></div></div>
+<p><button type="submit">Add</button></p></form></details>
+<p class="small muted">Guarantor personal income, living expenses and debt service are entered on the Financial data tab (for global cash flow).</p>
+</div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">Proposed loan terms {% if case.terms %}<span class="small muted">revision {{ case.terms.revision }} — saved {{ case.terms.created_at[:16].replace('T',' ') }}</span>{% endif %}</h2>
+<p class="small muted">These are user-entered structural assumptions. Saving creates a new revision; earlier revisions are kept.</p>
+<form method="post" action="/cases/{{ case.id }}/terms">{{ csrf() }}
+{% set terms = case.terms %}{% set prefix = "" %}{% include "_terms_fields.html" %}
+<p><button type="submit">Save terms (new revision)</button></p></form>
+{% if terms_history|length > 1 %}<details><summary>Terms history ({{ terms_history|length }} revisions)</summary>
+<table><tr><th>Rev</th><th class="num">Amount</th><th>Rate</th><th>Term/Amort</th><th>Repayment</th><th>Secured</th><th>Saved</th></tr>
+{% for t in terms_history %}<tr><td>{{ t.revision }}{% if t.is_current %} (current){% endif %}</td><td class="num">{{ t.requested_amount|money }}</td><td>{{ t.interest_rate|rate }}</td><td>{{ t.term_months or '—' }}/{{ t.amortization_months or '—' }}</td><td>{{ t.repayment_type }}</td><td>{{ 'yes' if t.is_secured else 'no' }}</td><td class="small">{{ t.created_at }}</td></tr>{% endfor %}
+</table></details>{% endif %}
+</div>
+
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Collateral</h2>
+{% if collateral %}<table><tr><th>Description</th><th>Type</th><th class="num">Value</th><th>Status</th></tr>
+{% for c in collateral %}{% set v = c.current_valuation %}<tr><td>{{ c.description }}</td><td>{{ c.collateral_type }}</td><td class="num">{{ v.value|money if v else '—' }}</td><td>{% if v %}<span class="badge {{ v.verification_status }}">{{ v.verification_status|upper }}</span> {{ v.valuation_date or 'undated' }}{% else %}<span class="badge conflict">NO VALUATION</span>{% endif %}</td></tr>{% endfor %}
+</table>{% else %}<p class="muted">None recorded.</p>{% endif %}
+<p><a href="/cases/{{ case.id }}/financials#collateral">Manage collateral →</a></p></div>
+<div class="panel"><h2 style="margin-top:0">Recent activity</h2>
+<table>{% for e in events %}<tr><td class="small">{{ e.occurred_at[:16].replace('T',' ') }}</td><td class="small">{{ e.action.replace('_',' ') }}</td></tr>{% else %}<tr><td class="muted">No activity.</td></tr>{% endfor %}</table>
+<p><a href="/cases/{{ case.id }}/audit">Full audit log →</a></p></div>
+</div>
+{% endblock %}

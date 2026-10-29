@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Import CSV{% endblock %}
+{% block content %}
+<p><a href="/{{ kind }}">← {{ kind.title() }}</a></p>
+<h1>Import {{ kind }} from CSV</h1>
+{% if not preview %}
+<div class="panel">
+<form method="post" action="/import/preview?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data">
+<div class="row"><div><label>What</label><select name="kind"><option value="contacts" {% if kind == 'contacts' %}selected{% endif %}>Contacts</option><option value="organizations" {% if kind == 'organizations' %}selected{% endif %}>Organizations</option></select></div>
+<div style="flex:2 1 260px"><label>CSV file (max 1 MB, {{ max_rows }} rows)</label><input type="file" name="file" accept=".csv,text/csv" required></div></div>
+<p><button>Preview</button></p></form>
+<p class="small"><b>Contacts</b> columns: <span class="mono">first_name, last_name</span> (required), <span class="mono">email, phone, title, contact_type, organization, organization_type, notes</span>.<br>
+<b>Organizations</b> columns: <span class="mono">name, org_type</span> (required), <span class="mono">website, phone, email, address_line1, address_line2, city, state, postal_code, country, industry, notes</span>.<br>
+Common header variants (First Name, Company, ZIP…) are recognised. Existing records (same email or name; same organization name and type) are skipped, never overwritten. The file is read in memory and not stored.</p>
+</div>
+{% else %}
+{% set c = preview.counts %}
+<div class="kpi"><div><b>{{ c.new }}</b><span>new</span></div><div><b>{{ c.existing }}</b><span>already exist (skipped)</span></div>
+<div><b>{{ c.duplicate }}</b><span>duplicate rows (skipped)</span></div><div><b>{{ c.invalid }}</b><span>invalid</span></div></div>
+{% if preview.ignored_columns %}<div class="warning-box">Ignored columns: {{ preview.ignored_columns|join(', ') }}</div>{% endif %}
+<table><tr><th>Line</th><th>Status</th>{% for col in preview.columns %}<th>{{ col }}</th>{% endfor %}<th>Problems</th></tr>
+{% for r in preview.rows[:500] %}<tr><td class="small">{{ r.line }}</td>
+<td><span class="badge {{ {'new':'verified','existing':'superseded','duplicate':'superseded','invalid':'rejected'}[r.status] }}">{{ r.status }}</span></td>
+{% for col in preview.columns %}<td class="small">{{ r.data.get(col, '') }}</td>{% endfor %}<td class="small">{{ r.errors|join('; ') }}</td></tr>{% endfor %}</table>
+{% if preview.rows|length > 500 %}<p class="small muted">Showing the first 500 of {{ preview.rows|length }} rows.</p>{% endif %}
+<form method="post" action="/import/commit" class="panel">{{ csrf() }}
+<input type="hidden" name="kind" value="{{ preview.kind }}"><input type="hidden" name="filename" value="{{ filename }}">
+<textarea name="csv_text" hidden aria-hidden="true">{{ csv_text }}</textarea>
+{% if c.invalid %}<label class="check"><input type="checkbox" name="skip_invalid"> Skip the {{ c.invalid }} invalid row(s) and import the rest</label>{% endif %}
+<p><button {% if not c.new %}disabled{% endif %}>Import {{ c.new }} new {{ preview.kind }}</button> <a class="btn secondary" href="/import?kind={{ kind }}">Choose another file</a></p>
+<p class="small muted">The import runs as one transaction: either every selected row is saved or none is.</p></form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "_macros.html" import metric_value, result %}
+{% block title %}Compare runs{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<h2>Run #{{ ra.run_number }} → Run #{{ rb.run_number }}</h2>
+<p class="small">A: {{ ra.policy_key }} v{{ ra.policy_version }}, {{ ra.mode }}, {{ ra.scenario_name or 'base' }}, inputs {{ ra.inputs_sha256[:12] }} ·
+B: {{ rb.policy_key }} v{{ rb.policy_version }}, {{ rb.mode }}, {{ rb.scenario_name or 'base' }}, inputs {{ rb.inputs_sha256[:12] }}
+{% if ra.inputs_sha256 == rb.inputs_sha256 and ra.policy_id == rb.policy_id %} — identical inputs and policy (deterministic results should match).{% endif %}</p>
+<h3>Rules</h3>
+<table><tr><th>Rule</th><th>A</th><th>B</th><th>Changed</th></tr>
+{% for r in rule_rows %}<tr><td>{{ r.rule_id }}<br><span class="small muted">{{ r.description }}</span></td><td>{{ result(r.a) }}</td><td>{{ result(r.b) if r.b else '—' }}</td><td>{{ '● changed' if r.changed else '' }}</td></tr>{% endfor %}</table>
+<h3>Metrics</h3>
+<table><tr><th>Metric</th><th class="num">A</th><th class="num">B</th><th>Changed</th></tr>
+{% for m in metric_rows %}<tr><td>{{ m.label }}</td><td class="num">{{ metric_value(m.a) }}</td><td class="num">{{ metric_value(m.b) if m.b else '—' }}</td><td>{{ '● changed' if m.changed else '' }}</td></tr>{% endfor %}</table>
+{% endblock %}

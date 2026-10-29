@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, fact_badges, source_ref %}
+{% block title %}Contradictions · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="info-box">When sources disagree, both values are kept and the affected metrics are not calculated. Resolve by choosing the value the
+evidence supports and documenting why. Never choose a value because it produces a better result.</div>
+{% for c in items %}
+<div class="panel">
+<h3 style="margin-top:0">≠ {{ c.field_label }}{% if c.item_label %} — {{ c.item_label }}{% endif %} · {{ c.period_label or 'no period' }}{% if c.party_name %} · {{ c.party_name }}{% endif %}</h3>
+<form method="post" action="/cases/{{ case.id }}/contradictions/resolve">{{ csrf() }}
+<table><tr><th>Keep</th><th class="num">Value</th><th>Source</th><th>Excerpt</th><th>Status</th></tr>
+{% for f in c.facts %}<tr><td><input type="radio" name="keep_fact_id" value="{{ f.id }}" required aria-label="Keep this value"><input type="hidden" name="group_fact_ids" value="{{ f.id }}"></td>
+<td class="num"><b>{{ f|fact_value }}</b></td><td class="small">{{ source_ref(f, case.id) }}</td><td>{% if f.excerpt %}<div class="excerpt">{{ f.excerpt }}</div>{% endif %}</td><td>{{ fact_badges(f) }}</td></tr>{% endfor %}
+</table>
+<label>Documented reason (required)</label><input type="text" name="reason" required minlength="5" placeholder="e.g. Tax return reflects accrual adjustments; reviewed CPA reconciliation">
+<p><button type="submit">Resolve: verify chosen value, reject others</button> <span class="small muted">Rejected values stay in history. To use a different value, correct one of them in Extraction review instead.</span></p>
+</form></div>
+{% else %}<p>✔ No unresolved contradictions.</p>{% endfor %}
+{% if resolved %}<h2>Resolution history</h2>
+<table><tr><th>When</th><th>Field</th><th>Reason</th></tr>{% for r in resolved %}<tr><td class="small">{{ r.occurred_at }}</td><td>{{ r.details.field_key }}</td><td>{{ r.details.reason }}</td></tr>{% endfor %}</table>{% endif %}
+{% endblock %}

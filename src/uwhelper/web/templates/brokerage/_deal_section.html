@@ -1,0 +1,62 @@
+<h2 id="submissions">Lender submissions</h2>
+<table><tr><th>Lender / program</th><th>Status</th><th>Submitted</th><th>Offers</th></tr>
+{% for s in submissions %}<tr><td><a href="/deals/{{ deal.id }}/submissions/{{ s.id }}">{{ s.lender }} · {{ s.program }}</a></td>
+<td><span class="badge {{ {'accepted':'verified','declined':'rejected','withdrawn':'superseded','term_sheet':'candidate'}.get(s.status, '') }}">{{ s.status.replace('_',' ') }}</span></td>
+<td class="small">{{ s.submitted_on or '—' }}{% if s.submitted_via %} · {{ s.submitted_via.replace('_',' ') }}{% endif %}</td><td>{{ s.offer_count }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">No submissions yet.</td></tr>{% endfor %}</table>
+{% if offers %}<p><a class="btn secondary small" href="/deals/{{ deal.id }}/offers/compare">Compare {{ offers|length }} offer(s) side by side</a></p>{% endif %}
+<div class="grid2">
+<div class="panel"><h3 style="margin-top:0">Build a submission package</h3>
+{% if programs %}<form method="post" action="/deals/{{ deal.id }}/packages/build">{{ csrf() }}
+<label>Lender program *</label><select name="program_id">{% for p in programs %}<option value="{{ p.id }}">{{ p.lender_name }} · {{ p.name }}</option>{% endfor %}</select>
+<label>Documents to include</label>{% for d in deal.documents %}<label class="check"><input type="checkbox" name="document_ids" value="{{ d.id }}"> {{ d.original_filename }} <span class="small muted">{{ doc_types.get(d.doc_type, d.doc_type) }}</span></label>{% else %}<p class="small muted">No deal documents yet.</p>{% endfor %}
+<label>Deal memo</label><select name="memo_id"><option value="">— none —</option>{% for mm in memos %}<option value="{{ mm.id }}">v{{ mm.version }} ({{ mm.created_at[:10] }})</option>{% endfor %}</select>
+<label>Matching to cite</label><select name="match_run_id"><option value="">— none —</option>{% for mr in match_runs[:10] %}<option value="{{ mr.id }}">{{ mr.created_at[:16].replace('T',' ') }}</option>{% endfor %}</select>
+<label class="check"><input type="checkbox" name="include_figures" checked> include key figures from the latest verified-only run</label>
+<p><button class="small">Build manifest</button></p></form>
+<p class="small muted">The manifest (files with SHA-256, figures, disclosure) is saved first; exporting a ZIP needs a named confirmation. Nothing is sent anywhere.</p>
+{% else %}<p class="muted small">Add <a href="/lenders">lender programs</a> first.</p>{% endif %}
+{% if packages %}<p class="small"><b>Packages:</b> {% for pk in packages %}<a href="/deals/{{ deal.id }}/packages/{{ pk.id }}">{{ pk.lender }} · {{ pk.program }} v{{ pk.version }}</a>{% if pk.exports %} ({{ pk.exports }} export{{ 's' if pk.exports > 1 }}){% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+</div>
+<div class="panel"><h3 style="margin-top:0">Record a submission</h3>
+{% if programs %}<form method="post" action="/deals/{{ deal.id }}/submissions/new">{{ csrf() }}
+<label>Lender program *</label><select name="program_id">{% for p in programs %}<option value="{{ p.id }}">{{ p.lender_name }} · {{ p.name }}</option>{% endfor %}</select>
+<label>Package (optional)</label><select name="package_id"><option value="">— none —</option>{% for pk in packages %}<option value="{{ pk.id }}">{{ pk.lender }} · {{ pk.program }} v{{ pk.version }}</option>{% endfor %}</select>
+<label>Notes</label><textarea name="notes"></textarea><p><button class="small">Create draft submission</button></p></form>{% endif %}
+</div></div>
+
+<h2 id="fees">Fees and commissions</h2>
+<p class="small">Funded amount used: <b>{{ fee_preview.funded|money if fee_preview.funded is not none else '—' }}</b> — {{ funded_basis }}.</p>
+<table><tr><th>Agreement</th><th>Basis</th><th>Party</th><th class="num">Amount now</th><th></th></tr>
+{% set amounts = {} %}{% for ln in fee_preview.lines_in + fee_preview.lines_out %}{% set _ = amounts.update({ln.agreement_id: ln.amount}) %}{% endfor %}
+{% for a in agreements %}<tr><td>{% if a.voided %}<s>{{ a.kind.replace('_',' ') }}</s> <span class="badge superseded">voided</span>{% else %}{{ a.kind.replace('_',' ') }}{% endif %}{% if a.description %}<br><span class="small muted">{{ a.description }}</span>{% endif %}</td>
+<td class="small">{% if a.basis == 'flat' %}{{ a.value|money(2) }} flat{% else %}{{ (a.value|float * 100)|round(4) }}% of {{ 'funded amount' if a.basis == 'percent_of_funded' else "broker's gross" }}{% endif %}</td>
+<td class="small">{{ a.party_org or a.party_contact or '—' }}</td><td class="num">{{ amounts.get(a.id)|money(2) if amounts.get(a.id) is not none else '—' }}</td>
+<td>{% if not a.voided %}<details><summary class="small">Void</summary><form method="post" action="/deals/{{ deal.id }}/fees/void" class="actions">{{ csrf() }}<input type="hidden" name="agreement_id" value="{{ a.id }}"><input type="text" name="reason" placeholder="Reason" required minlength="5" aria-label="Reason"><button class="small danger">Void</button></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No fee agreements.</td></tr>{% endfor %}
+{% if agreements %}<tr><td colspan="3"><b>Broker gross / payouts / net</b></td><td class="num"><b>{{ fee_preview.gross|money(2) }}</b> / {{ fee_preview.payouts|money(2) }} / <b>{{ fee_preview.net|money(2) }}</b></td><td></td></tr>{% endif %}</table>
+{% for pr in fee_preview.problems %}<p class="warning-box">{{ pr }}</p>{% endfor %}
+<details><summary>Add fee agreement</summary><form method="post" action="/deals/{{ deal.id }}/fees/agreement">{{ csrf() }}
+<div class="row"><div><label>Kind</label><select name="kind"><option value="broker_fee">Broker fee (paid by borrower)</option><option value="lender_compensation">Lender-paid compensation</option><option value="referral_split">Referral split (paid out)</option></select></div>
+<div><label>Basis</label><select name="basis"><option value="percent_of_funded">% of funded amount</option><option value="flat">Flat amount</option><option value="percent_of_broker_gross">% of broker gross (splits only)</option></select></div>
+<div><label>Value (e.g. 1% or 2,500)</label><input type="text" name="value" required></div></div>
+<div class="row"><div><label>Party organization</label><select name="party_organization_id"><option value="">—</option>{% for o in all_orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></div>
+<div><label>Party contact</label><select name="party_contact_id"><option value="">—</option>{% for c in contacts %}<option value="{{ c.id }}">{{ c.last_name }}, {{ c.first_name }}</option>{% endfor %}</select></div></div>
+<label>Description</label><input type="text" name="description"><p><button class="small">Add</button></p></form></details>
+
+<h3>Commission ledger</h3>
+<p class="small">Expected in {{ ledger.expected_in|money(2) }} · received {{ ledger.received|money(2) }} · <b>receivable {{ ledger.receivable|money(2) }}</b>{% if ledger.receivable_age_days is not none %} (oldest {{ ledger.receivable_age_days }} days){% endif %} · owed to partners {{ ledger.payable|money(2) }} · <a href="/commissions">all deals</a></p>
+<table><tr><th>Date</th><th>Type</th><th class="num">Amount</th><th>Counterparty / reference</th><th></th></tr>
+{% for e in ledger.entries %}<tr><td class="small">{{ e.occurred_on }}</td><td>{% if e.reverses_entry_id %}reversal of {{ e.entry_type.replace('_',' ') }}{% else %}{{ e.entry_type.replace('_',' ') }}{% endif %}{% if e.id in ledger.reversed_ids %} <span class="badge superseded">reversed</span>{% endif %}</td>
+<td class="num">{% if e.reverses_entry_id %}−{% endif %}{{ e.amount|money(2) }}</td><td class="small">{{ e.counterparty or '' }} {{ e.reference or '' }}{% if e.note %}<br><span class="muted">{{ e.note }}</span>{% endif %}</td>
+<td>{% if not e.reverses_entry_id and e.id not in ledger.reversed_ids %}<details><summary class="small">Reverse</summary><form method="post" action="/deals/{{ deal.id }}/fees/reverse" class="actions">{{ csrf() }}<input type="hidden" name="entry_id" value="{{ e.id }}"><input type="text" name="reason" required minlength="5" placeholder="Reason" aria-label="Reason"><button class="small secondary">Reverse</button></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No entries.</td></tr>{% endfor %}</table>
+<div class="actions">
+{% if deal.status in ('FUNDED', 'SERVICING') %}<form method="post" action="/deals/{{ deal.id }}/fees/expected" class="inline">{{ csrf() }}<input type="date" name="occurred_on" aria-label="Expected as of"><button class="small secondary">Record expected commissions</button></form>{% else %}<span class="small muted">Expected commissions are recorded once the deal is funded.</span>{% endif %}
+</div>
+<details><summary>Record a payment received or paid out</summary><form method="post" action="/deals/{{ deal.id }}/fees/entry">{{ csrf() }}
+<div class="row"><div><label>Type</label><select name="entry_type"><option value="received">Received by broker</option><option value="paid_out">Paid out to partner</option></select></div>
+<div><label>Agreement</label><select name="fee_agreement_id"><option value="">—</option>{% for a in agreements if not a.voided %}<option value="{{ a.id }}">{{ a.kind.replace('_',' ') }} {{ a.party_org or a.party_contact or '' }}</option>{% endfor %}</select></div>
+<div><label>Amount *</label><input type="text" name="amount" required></div><div><label>Date *</label><input type="date" name="occurred_on" required></div></div>
+<div class="row"><div><label>Counterparty</label><input type="text" name="counterparty"></div><div><label>Reference</label><input type="text" name="reference"></div></div>
+<p><button class="small">Record</button></p></form></details>

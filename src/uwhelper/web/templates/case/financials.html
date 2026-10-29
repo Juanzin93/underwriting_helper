@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, fact_badges %}
+{% block title %}Financial data · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+{% set duration_periods = periods|selectattr("period_months", "gt", 0)|list %}
+{% set instant_periods = periods|selectattr("period_months", "equalto", 0)|list %}
+{% set cat_titles = {"income_statement": "Income statement", "cash_flow": "Cash-flow deductions (enter 0 if none)",
+  "balance_sheet": "Balance sheet", "aging": "AR / AP aging", "property": "Property operations (CRE)", "bank": "Bank statements (informational)",
+  "projection": "Projections (informational)"} %}
+
+<div class="panel">
+<h2 style="margin-top:0">Base period</h2>
+<form method="post" action="/cases/{{ case.id }}/base-period" class="actions">{{ csrf() }}
+<select name="period_id" aria-label="Base period"><option value="">Automatic: latest 12-month period with revenue</option>
+{% for p in duration_periods %}<option value="{{ p.id }}" {% if case.base_period_id == p.id %}selected{% endif %}>{{ p.label }}{% if p.period_months != 12 %} (will be annualized ×12/{{ p.period_months }}){% endif %}</option>{% endfor %}</select>
+<button class="small secondary" type="submit">Set base period</button></form>
+<p class="small muted">Balance-sheet values are taken as of the base period end date. A period shorter than 12 months is annualized and every rule using it is held for review.</p>
+</div>
+
+<div class="panel" id="add">
+<h2 style="margin-top:0">Enter or add a value</h2>
+<form method="post" action="/cases/{{ case.id }}/facts">{{ csrf() }}
+<div class="row">
+<div style="flex: 2 1 260px"><label for="field_key">Field *</label><select id="field_key" name="field_key" required>
+{% for cat, specs in categories.items() %}<optgroup label="{{ cat_titles.get(cat, cat) }}">{% for s in specs %}<option value="{{ s.key }}">{{ s.label }}{% if s.informational %} (informational){% endif %}</option>{% endfor %}</optgroup>{% endfor %}
+<optgroup label="Identity / request">{% for k, s in catalog.items() if s.timing == 'static' %}<option value="{{ k }}">{{ s.label }}</option>{% endfor %}</optgroup>
+</select></div>
+<div><label for="value">Value *</label><input type="text" id="value" name="value" required placeholder="1,234,567 or (12,500)"></div>
+<div><label for="period_end">Period end / as-of date</label><input type="date" id="period_end" name="period_end"></div>
+<div><label for="period_months">Months covered</label><select id="period_months" name="period_months"><option value="12">12 (fiscal year / TTM)</option>{% for m in range(11, 0, -1) %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
+</div>
+<div class="row">
+<div><label for="document_id">Source document</label><select id="document_id" name="document_id"><option value="">None (user knowledge)</option>{% for d in docs %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select></div>
+<div><label for="page_number">Page</label><input type="number" id="page_number" name="page_number" min="1"></div>
+<div style="flex: 2 1 260px"><label for="note">Note</label><input type="text" id="note" name="note" maxlength="1000"></div>
+</div>
+<label class="check"><input type="checkbox" name="mark_verified"> I checked this against the source — mark VERIFIED</label>
+<p><button type="submit">Save value</button> <span class="small muted">Balance-sheet fields ignore "months covered". Values are stored as USER-ENTERED; nothing is overwritten.</span></p>
+</form>
+</div>
+
+{% for cat, specs in categories.items() %}
+{% set cols = instant_periods if specs[0].timing == 'instant' else duration_periods %}
+<h2>{{ cat_titles.get(cat, cat) }}</h2>
+{% if not cols %}<p class="muted small">No {{ 'balance sheet dates' if specs[0].timing == 'instant' else 'reporting periods' }} yet.</p>{% else %}
+<table>
+<tr><th>Field</th>{% for p in cols %}<th class="num">{{ p.label }}{% if case.base_period_id == p.id %} (base){% endif %}</th>{% endfor %}</tr>
+{% for s in specs %}
+<tr><td title="{{ s.description }}">{{ s.label }}{% if s.informational %} <span class="small muted">(info)</span>{% endif %}</td>
+{% for p in cols %}{% set cell = grid.get(s.key, {}).get(p.id, []) %}
+<td class="num">{% for f in cell %}<div>{{ f|fact_value }} {% if f.status == 'verified' %}<span class="badge verified" title="verified">✔</span>{% else %}<span class="badge candidate" title="unverified">⚠</span>{% endif %}{% if f.in_conflict %}<span class="badge conflict">≠</span>{% endif %}{% if f.source_type == 'extracted' %}<span class="badge ai" title="AI-extracted">AI</span>{% endif %}</div>{% else %}<span class="muted">—</span>{% endfor %}</td>
+{% endfor %}</tr>
+{% endfor %}
+</table>
+{% endif %}
+{% endfor %}
+<p class="small muted">✔ verified · ⚠ unverified · ≠ sources disagree (see Contradictions) · AI = extracted by the local model.</p>
+
+<h2>EBITDA adjustments (add-backs)</h2>
+{% if adjustments %}<table><tr><th>Description</th><th>Period</th><th class="num">Amount</th><th>Status</th><th></th></tr>
+{% for f in adjustments %}<tr><td>{{ f.item_label }}</td><td>{{ f.period_label }}</td><td class="num">{{ f|fact_value }}</td><td>{{ fact_badges(f) }}</td>
+<td>{% if f.status == 'candidate' %}<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/verify?next=/cases/{{ case.id }}/financials" class="inline">{{ csrf() }}<button class="small">Verify</button></form>{% endif %}
+<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/reject?next=/cases/{{ case.id }}/financials" class="inline">{{ csrf() }}<input type="hidden" name="reason" value="Adjustment not supported"><button class="small secondary">Reject</button></form></td></tr>{% endfor %}
+</table>{% endif %}
+<details><summary>Add an adjustment</summary>
+<form method="post" action="/cases/{{ case.id }}/facts?next=/cases/{{ case.id }}/financials">{{ csrf() }}<input type="hidden" name="field_key" value="ebitda_adjustment">
+<div class="row"><div style="flex:2 1 260px"><label>Description *</label><input type="text" name="item_label" required placeholder="One-time legal settlement"></div>
+<div><label>Amount (+ add-back / − deduction) *</label><input type="text" name="value" required></div>
+<div><label>Period end *</label><input type="date" name="period_end" required></div>
+<div><label>Months</label><input type="number" name="period_months" value="12" min="1" max="12"></div></div>
+<div class="row"><div><label>Source document</label><select name="document_id"><option value="">None</option>{% for d in docs %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select></div><div><label>Page</label><input type="number" name="page_number" min="1"></div></div>
+<label class="check"><input type="checkbox" name="mark_verified"> Mark verified</label><button class="small" type="submit">Add adjustment</button></form></details>
+
+<h2>Guarantor personal cash flow</h2>
+{% set guarantors = parties|selectattr("is_guarantor")|list %}
+{% if not guarantors %}<p class="muted">No guarantors. Add one on the Overview tab to enable global cash flow.</p>{% else %}
+{% if guarantor_facts %}<table><tr><th>Guarantor</th><th>Field</th><th>Period</th><th class="num">Value</th><th>Status</th></tr>
+{% for f in guarantor_facts %}<tr><td>{{ f.party_name }}</td><td>{{ f.field_label }}</td><td>{{ f.period_label }}</td><td class="num">{{ f|fact_value }}</td><td>{{ fact_badges(f) }}</td></tr>{% endfor %}</table>{% endif %}
+<details><summary>Add guarantor value</summary>
+<form method="post" action="/cases/{{ case.id }}/facts?next=/cases/{{ case.id }}/financials">{{ csrf() }}
+<div class="row"><div><label>Guarantor</label><select name="entity_ref">{% for g in guarantors %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}</select></div>
+<div><label>Field</label><select name="field_key">{% for k, s in catalog.items() if s.party_scoped %}<option value="{{ k }}">{{ s.label }}</option>{% endfor %}</select></div>
+<div><label>Annual value *</label><input type="text" name="value" required></div>
+<div><label>Period end *</label><input type="date" name="period_end" required></div><div><label>Months</label><input type="number" name="period_months" value="12" min="1" max="12"></div></div>
+<label class="check"><input type="checkbox" name="mark_verified"> Mark verified</label><button class="small" type="submit">Add</button>
+<p class="small muted">Personal income must exclude salary/distributions from this business, which are already in business cash flow.</p></form></details>
+{% endif %}
+
+{% if static_facts %}<h2>Identity / request facts (informational)</h2>
+<table><tr><th>Field</th><th>Value</th><th>Status</th></tr>{% for f in static_facts %}<tr><td>{{ f.field_label }}</td><td>{{ f|fact_value }}</td><td>{{ fact_badges(f) }}</td></tr>{% endfor %}</table>{% endif %}
+
+<h2 id="debts">Existing debt schedule</h2>
+<div class="{{ 'info-box' if case.debt_schedule_confirmed else 'warning-box' }}">
+{% if case.debt_schedule_confirmed %}✔ Debt schedule marked complete. Existing debt service = Σ annualized payments of verified debts not being refinanced.
+{% else %}⚠ Debt schedule NOT confirmed complete — existing debt service, DSCR and leverage stay UNKNOWN until you confirm (even if there is no debt).{% endif %}
+<form method="post" action="/cases/{{ case.id }}/debt-schedule" class="inline">{{ csrf() }}
+<input type="hidden" name="confirmed" value="{{ '' if case.debt_schedule_confirmed else 'on' }}">
+<button class="small secondary" type="submit">{{ 'Mark incomplete' if case.debt_schedule_confirmed else 'Confirm schedule is complete' }}</button></form></div>
+{% if debts %}<table><tr><th>Creditor</th><th class="num">Balance</th><th>Rate</th><th class="num">Payment</th><th>Frequency</th><th class="num">Annual</th><th>Maturity</th><th>Refinanced?</th><th>Status</th><th></th></tr>
+{% for d in debts %}{% set mult = {'monthly':12,'quarterly':4,'semiannual':2,'annual':1}[d.payment_frequency] %}
+<tr><td>{{ d.creditor }}<br><span class="small muted">{{ d.description or '' }}</span></td><td class="num">{{ d.current_balance|money }}</td><td>{{ d.interest_rate|rate }}</td>
+<td class="num">{{ d.payment_amount|money(2) }}</td><td>{{ d.payment_frequency }} (×{{ mult }})</td><td class="num">{{ ((d.payment_amount|float) * mult)|money if d.payment_amount else '—' }}</td>
+<td>{{ d.maturity_date or '—' }}</td><td>{{ 'YES — excluded' if d.to_be_refinanced else 'no' }}</td><td><span class="badge {{ d.verification_status }}">{{ d.verification_status|upper }}</span></td>
+<td class="actions">{% for st in ['verified','unverified','rejected'] if st != d.verification_status %}<form method="post" action="/cases/{{ case.id }}/debts/{{ d.id }}/status" class="inline">{{ csrf() }}<input type="hidden" name="status" value="{{ st }}"><button class="small secondary">{{ st|capitalize }}</button></form>{% endfor %}
+<form method="post" action="/cases/{{ case.id }}/debts/{{ d.id }}/delete" class="inline" data-confirm="Delete this debt?">{{ csrf() }}<button class="small danger">Delete</button></form></td></tr>{% endfor %}
+</table>{% endif %}
+<details><summary>Add existing debt</summary>
+<form method="post" action="/cases/{{ case.id }}/debts">{{ csrf() }}
+<div class="row"><div><label>Creditor *</label><input type="text" name="creditor" required></div><div><label>Description</label><input type="text" name="description"></div>
+<div><label>Type</label><select name="debt_type">{% for t in ['term_loan','line_of_credit','equipment_loan','mortgage','vehicle','lease','other'] %}<option>{{ t }}</option>{% endfor %}</select></div></div>
+<div class="row"><div><label>Original amount</label><input type="text" name="original_amount"></div><div><label>Current balance</label><input type="text" name="current_balance"></div>
+<div><label>Rate (%)</label><input type="text" name="interest_rate"></div><div><label>Scheduled payment</label><input type="text" name="payment_amount"></div>
+<div><label>Payment frequency</label><select name="payment_frequency">{% for f in ['monthly','quarterly','semiannual','annual'] %}<option>{{ f }}</option>{% endfor %}</select></div>
+<div><label>Maturity</label><input type="date" name="maturity_date"></div></div>
+<div class="row"><div><label>Source document</label><select name="document_id"><option value="">None</option>{% for d in docs %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select></div><div><label>Page</label><input type="number" name="page_number" min="1"></div>
+<div><label>Status</label><select name="verification_status"><option value="unverified">Unverified</option><option value="verified">Verified</option></select></div></div>
+<label class="check"><input type="checkbox" name="to_be_refinanced"> Will be refinanced by the proposed loan (excluded from continuing debt service)</label>
+<button class="small" type="submit">Add debt</button></form></details>
+
+<h2 id="collateral">Collateral and valuations</h2>
+{% for c in collateral %}
+<div class="panel"><b>{{ c.description }}</b> · {{ c.collateral_type }} · lien position {{ c.lien_position }} · prior liens {{ c.prior_lien_balance|money }}
+<form method="post" action="/cases/{{ case.id }}/collateral/{{ c.id }}/delete" class="inline" data-confirm="Delete this collateral and its valuations?">{{ csrf() }}<button class="small danger">Delete</button></form>
+<table><tr><th class="num">Value</th><th>Date</th><th>Method</th><th>Source</th><th>Status</th><th></th></tr>
+{% for v in c.valuations %}<tr><td class="num">{{ v.value|money }}</td><td>{{ v.valuation_date or 'undated' }}</td><td>{{ v.valuation_method }}</td><td class="small">{% if v.document_id %}<a href="/cases/{{ case.id }}/documents/{{ v.document_id }}?page={{ v.page_number or 1 }}">document p.{{ v.page_number or '?' }}</a>{% else %}—{% endif %}</td>
+<td><span class="badge {{ v.verification_status }}">{{ v.verification_status|upper }}</span>{% if c.current_valuation and v.id == c.current_valuation.id %} (used){% endif %}</td>
+<td>{% for st in ['verified','unverified','rejected'] if st != v.verification_status %}<form method="post" action="/cases/{{ case.id }}/valuations/{{ v.id }}/status" class="inline">{{ csrf() }}<input type="hidden" name="status" value="{{ st }}"><button class="small secondary">{{ st|capitalize }}</button></form>{% endfor %}</td></tr>
+{% else %}<tr><td colspan="6"><span class="badge conflict">NO VALUATION</span></td></tr>{% endfor %}</table>
+<details><summary>Add valuation</summary><form method="post" action="/cases/{{ case.id }}/collateral/{{ c.id }}/valuations">{{ csrf() }}
+<div class="row"><div><label>Value *</label><input type="text" name="value" required></div><div><label>Valuation date</label><input type="date" name="valuation_date"></div>
+<div><label>Method</label><select name="valuation_method">{% for m in ['appraisal','broker_opinion','invoice','book_value','tax_assessment','user_estimate','other'] %}<option>{{ m }}</option>{% endfor %}</select></div>
+<div><label>Status</label><select name="verification_status"><option value="unverified">Unverified</option><option value="verified">Verified</option></select></div>
+<div><label>Document</label><select name="document_id"><option value="">None</option>{% for d in docs %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select></div><div><label>Page</label><input type="number" name="page_number" min="1"></div></div>
+<button class="small" type="submit">Add valuation</button></form></details>
+</div>
+{% else %}<p class="muted">No collateral recorded.</p>{% endfor %}
+<details><summary>Add collateral</summary>
+<form method="post" action="/cases/{{ case.id }}/collateral">{{ csrf() }}
+<div class="row"><div style="flex:2 1 260px"><label>Description *</label><input type="text" name="description" required></div>
+<div><label>Type</label><select name="collateral_type">{% for t in ['real_estate','equipment','vehicles','accounts_receivable','inventory','cash_securities','business_assets','other'] %}<option>{{ t }}</option>{% endfor %}</select></div>
+<div><label>Lien position</label><input type="number" name="lien_position" value="1" min="1" max="10"></div><div><label>Prior lien balance</label><input type="text" name="prior_lien_balance" value="0"></div></div>
+<p class="small muted">Optional first valuation:</p>
+<div class="row"><div><label>Value</label><input type="text" name="value"></div><div><label>Date</label><input type="date" name="valuation_date"></div>
+<div><label>Method</label><select name="valuation_method">{% for m in ['appraisal','broker_opinion','invoice','book_value','tax_assessment','user_estimate','other'] %}<option>{{ m }}</option>{% endfor %}</select></div>
+<div><label>Status</label><select name="verification_status"><option value="unverified">Unverified</option><option value="verified">Verified</option></select></div>
+<div><label>Document</label><select name="document_id"><option value="">None</option>{% for d in docs %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select></div><div><label>Page</label><input type="number" name="page_number" min="1"></div></div>
+<button class="small" type="submit">Add collateral</button></form></details>
+{% endblock %}

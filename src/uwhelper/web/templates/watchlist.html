@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Watchlist{% endblock %}
+{% block content %}
+<p><a href="/portfolio">← Portfolio</a></p>
+<h1>Watchlist — all loans</h1>
+<p class="small">Loans serviced in the app show their servicing alerts (payments, covenants, maturity, balloon); brokered loans show upcoming key dates from their funding and final terms. Each loan appears once.{% if created %} {{ created }} new reminder task(s) were just created.{% endif %}</p>
+<table><tr><th>Severity</th><th>Loan</th><th>What</th><th>Source</th></tr>
+{% for i in items %}<tr><td><span class="badge {{ {'high':'rejected','medium':'candidate'}.get(i.severity, '') }}">{{ i.severity }}</span></td>
+<td>{% if i.deal_id %}<a href="/deals/{{ i.deal_id }}">{{ i.deal_number }}</a>{% endif %}{% if i.case_id %} <a href="/cases/{{ i.case_id }}/servicing">{{ i.loan_number }}</a>{% endif %}</td>
+<td>{{ i.message }}</td><td class="small">{{ 'servicing' if i.source == 'servicing' else 'brokered loan dates' }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">Nothing needs attention.</td></tr>{% endfor %}</table>
+{% endblock %}

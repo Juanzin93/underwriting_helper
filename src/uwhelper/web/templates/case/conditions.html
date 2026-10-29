@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Conditions · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="kpi">
+{% for ph, label in [('DUE_DILIGENCE','Due diligence'),('CLOSING','Closing')] %}{% set s = summary[ph] %}
+<div><b>{{ s.closed }}/{{ s.total }}</b><span>{{ label }} items satisfied or waived</span></div>
+<div><b>{{ s.required_open|length }}</b><span>{{ label }}: required items open {% if s.required_open %}— blocks {{ 'closing' if ph == 'DUE_DILIGENCE' else 'funding' }}{% endif %}</span></div>
+<div><b>{{ s.overdue|length }}</b><span>{{ label }}: overdue</span></div>{% endfor %}
+</div>
+{% if summary.DUE_DILIGENCE.required_open %}<div class="warning-box"><b>Blockers for closing:</b> {% for c in summary.DUE_DILIGENCE.required_open %}{{ c.code }}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+<div class="actions">
+<form method="post" action="/cases/{{ case.id }}/conditions/generate" class="inline">{{ csrf() }}<button class="secondary">Generate from case policy</button></form>
+<a href="?">All</a> · <a href="?phase=DUE_DILIGENCE">Due diligence</a> · <a href="?phase=CLOSING">Closing</a>
+</div>
+<p class="small muted">Which items exist and whether they are required comes from the policy, the human credit decision, or manual entry. The software never satisfies or waives an item by itself.</p>
+
+<table>
+<tr><th>Code</th><th>Condition</th><th>Phase / category</th><th>Req.</th><th>Responsible / due</th><th>Status</th><th>Evidence</th><th>Actions</th></tr>
+{% for c in conditions %}
+<tr><td class="mono small">{{ c.code }}<br><a class="small" href="?history={{ c.id }}">history</a></td><td>{{ c.description }}<br><span class="small muted">source: {{ c.source }}{% if not c.waivable %} · NOT waivable{% endif %}</span></td>
+<td class="small">{{ c.phase.replace('_',' ').lower() }}<br>{{ c.category.replace('_',' ') }}</td><td>{{ 'Required' if c.required else 'Optional' }}</td>
+<td class="small">{{ c.responsible_party }}<br>{{ c.due_date or 'no due date' }}{% if c.overdue %} <span class="badge conflict">OVERDUE</span>{% endif %}</td>
+<td><span class="badge {{ 'verified' if c.status in ('SATISFIED','WAIVED') else ('conflict' if c.status == 'REJECTED' else 'unverified') }}">{{ c.status.replace('_',' ') }}</span>
+{% if c.status == 'WAIVED' %}<br><span class="small">by {{ c.waived_by }}: {{ c.waiver_reason }}</span>{% endif %}</td>
+<td class="small">{% if c.document_id %}<a href="/cases/{{ case.id }}/documents/{{ c.document_id }}">{{ c.original_filename }}</a><br>{% endif %}{{ c.evidence_note or '' }}{% if c.verification_status == 'verified' %} <span class="badge verified">✔ verified</span>{% endif %}
+{% if c.reviewer_notes %}<br><i>{{ c.reviewer_notes }}</i>{% endif %}</td>
+<td class="small">
+{% if c.allowed %}<details><summary>Change status</summary>
+<form method="post" action="/cases/{{ case.id }}/conditions/{{ c.id }}/status">{{ csrf() }}
+<select name="to_status">{% for s in c.allowed %}<option>{{ s }}</option>{% endfor %}</select>
+<label>Document</label><select name="document_id"><option value="">—</option>{% for d in docs %}<option value="{{ d.id }}" {% if d.id == c.document_id %}selected{% endif %}>{{ d.original_filename }}</option>{% endfor %}</select>
+<label>Evidence note</label><input type="text" name="evidence_note" value="{{ c.evidence_note or '' }}">
+<label>Note / reason</label><input type="text" name="note">
+<label class="check"><input type="checkbox" name="verified"> I reviewed and verified the evidence (needed for SATISFIED)</label>
+<button class="small">Save</button></form></details>{% endif %}
+{% if c.waivable and c.status not in ('SATISFIED','WAIVED') %}<details><summary>Waive…</summary>
+<form method="post" action="/cases/{{ case.id }}/conditions/{{ c.id }}/waive" data-confirm="Record a waiver for {{ c.code }}?">{{ csrf() }}
+<label>Approved by *</label><input type="text" name="waived_by" required minlength="2">
+<label>Explanation (≥ 20 chars) *</label><input type="text" name="reason" required minlength="20">
+<label class="check"><input type="checkbox" name="confirm" required> A responsible human approved this waiver</label>
+<button class="small danger">Record waiver</button></form></details>{% endif %}
+<details><summary>Details</summary><form method="post" action="/cases/{{ case.id }}/conditions/{{ c.id }}/details">{{ csrf() }}
+<label>Due date</label><input type="date" name="due_date" value="{{ c.due_date or '' }}"><label>Responsible party</label><input type="text" name="responsible_party" value="{{ c.responsible_party }}">
+<label>Reviewer notes</label><input type="text" name="reviewer_notes" value="{{ c.reviewer_notes or '' }}"><button class="small secondary">Save</button></form></details>
+</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No conditions yet. Generate them from the case policy or add one below.</td></tr>{% endfor %}
+</table>
+
+{% if history %}<h2>History of {{ (conditions|selectattr('id','equalto',history_id)|first or {}).get('code','condition') }}</h2>
+<table><tr><th>When</th><th>From</th><th>To</th><th>Note</th><th>Details</th></tr>{% for e in history %}<tr><td class="small">{{ e.occurred_at }}</td><td>{{ e.from_status or '—' }}</td><td>{{ e.to_status }}</td><td class="small">{{ e.note or '' }}</td><td class="small mono">{{ e.details }}</td></tr>{% endfor %}</table>{% endif %}
+
+<details class="panel"><summary>Add a condition manually</summary>
+<form method="post" action="/cases/{{ case.id }}/conditions">{{ csrf() }}
+<div class="row"><div><label>Code *</label><input type="text" name="code" required pattern="[A-Z][A-Z0-9_\-]{1,40}" placeholder="X-ENV-1"></div>
+<div style="flex:3 1 300px"><label>Description *</label><input type="text" name="description" required></div></div>
+<div class="row"><div><label>Category</label><select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
+<div><label>Phase</label><select name="phase"><option value="DUE_DILIGENCE">Due diligence</option><option value="CLOSING">Closing</option></select></div>
+<div><label>Responsible party</label><input type="text" name="responsible_party" value="borrower"></div><div><label>Due date</label><input type="date" name="due_date"></div></div>
+<label class="check"><input type="checkbox" name="required" checked> Required</label><label class="check"><input type="checkbox" name="waivable" checked> Waivable</label>
+<p><button class="small">Add condition</button></p></form></details>
+{% endblock %}

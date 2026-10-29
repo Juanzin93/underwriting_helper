@@ -1,0 +1,31 @@
+<div class="actions" style="justify-content: space-between">
+<div><h1 style="margin-bottom:0">{{ case.case_number }} · {{ case.borrower.legal_name }}</h1>
+<span class="muted">{{ case.title }} · {{ loan_types[case.loan_type].label }} · policy {{ case.policy_key or 'default' }}{% if case.policy_version %} v{{ case.policy_version }}{% endif %}{% if case.status == 'archived' %} · archived{% endif %}</span>
+{% if case.is_synthetic %}<span class="badge">SYNTHETIC SAMPLE</span>{% endif %}</div>
+<form method="post" action="/cases/{{ case.id }}/run" class="actions">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<select name="mode" aria-label="Run mode"><option value="verified_only">Verified facts only</option><option value="include_unverified">Preview incl. unverified (flagged)</option></select>
+<button type="submit">▶ Run screening</button>
+</form>
+</div>
+<div class="stagebar">
+<span class="stage stage-{{ case.stage }}">Stage: {{ stage_labels.get(case.stage, case.stage) }}</span>
+<span class="small muted">since {{ (case.stage_entered_at or '')[:16].replace('T',' ') }}{% if case.stage == 'ON_HOLD' %} · returns to {{ stage_labels.get(case.hold_return_stage, '') }}{% endif %}</span>
+{% for a in next_actions %}
+<span class="small">Next: <a href="/cases/{{ case.id }}/workflow">{{ a.label }}</a>
+{% if a.hard_blocked %}<span class="badge conflict">✖ {{ a.blockers|selectattr("hard")|list|length }} blocker(s)</span>{% elif a.soft_only %}<span class="badge unverified">⚠ {{ a.blockers|length }} item(s) to resolve or override</span>{% else %}<span class="badge verified">✔ ready</span>{% endif %}</span>
+{% endfor %}
+</div>
+<nav class="tabs" aria-label="Analysis sections">
+{% set tabs = [("overview","Overview",""),("documents","Documents","/documents"),("review","Extraction review","/review"),
+  ("financials","Financial data","/financials")] + ([("property","Property (rent roll & T-12)","/property")] if case.loan_type == 'commercial_real_estate' else []) + [("metrics","Metrics","/metrics"),("findings","Findings","/findings"),
+  ("missing","Missing info","/missing"),("contradictions","Contradictions","/contradictions"),("scenarios","Stress tests","/scenarios"),
+  ("runs","Run history","/runs"),("reports","Screening reports","/reports")] %}
+{% for key, label, path in tabs %}<a href="/cases/{{ case.id }}{{ path }}" class="{{ 'active' if active == key else '' }}" {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+<nav class="tabs lifecycle" aria-label="Lifecycle sections">
+{% set tabs2 = [("workflow","Workflow","/workflow"),("memo","Credit memo","/memo"),("structuring","Structuring","/structuring"),
+  ("decision","Credit decision","/decision"),("conditions","Conditions","/conditions"),("closing","Closing & funding","/closing"),
+  ("servicing","Servicing","/servicing"),("audit","Audit log","/audit")] %}
+{% for key, label, path in tabs2 %}<a href="/cases/{{ case.id }}{{ path }}" class="{{ 'active' if active == key else '' }}" {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>

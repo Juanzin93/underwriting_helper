@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Submission · {{ deal.deal_number }}{% endblock %}
+{% block content %}
+<p><a href="/deals/{{ deal.id }}#submissions">← {{ deal.deal_number }} · {{ deal.name }}</a></p>
+<h1>{{ sub.lender }} · {{ sub.program }} <span class="badge">{{ sub.status.replace('_',' ') }}</span></h1>
+<p class="small">{% if sub.submitted_on %}Submitted {{ sub.submitted_on }} via {{ sub.submitted_via.replace('_',' ') }}{% else %}Not submitted yet{% endif %}{% if sub.package_version %} · package v{{ sub.package_version }}{% endif %}{% if sub.contact_name %} · contact {{ sub.contact_name }}{% endif %}</p>
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Status</h2>
+{% if sub.allowed %}<form method="post" action="/deals/{{ deal.id }}/submissions/{{ sub.id }}/status">{{ csrf() }}
+<div class="row"><div><label>Move to</label><select name="to_status">{% for t in sub.allowed %}<option value="{{ t }}">{{ t.replace('_',' ') }}</option>{% endfor %}</select></div>
+<div><label>Submitted on (for "submitted")</label><input type="date" name="submitted_on" max="{{ today }}"></div>
+<div><label>How</label><select name="submitted_via"><option value="">—</option>{% for v in ['email','portal','in_person','phone','other'] %}<option value="{{ v }}">{{ v.replace('_',' ') }}</option>{% endfor %}</select></div></div>
+<label>Reason / note (required for declined or withdrawn)</label><input type="text" name="reason">
+<p><button class="small">Update</button></p></form>{% else %}<p class="muted">No further changes.</p>{% endif %}
+<table>{% for h in sub.history|reverse %}<tr><td class="small">{{ h.occurred_at[:16].replace('T',' ') }}</td><td>{{ h.from_status or '—' }} → <b>{{ h.to_status }}</b></td><td class="small">{{ h.reason or '' }}</td><td class="small">{{ h.actor }}</td></tr>{% endfor %}</table></div>
+<div class="panel"><h2 style="margin-top:0">Offers</h2>
+{% for o in sub.offers %}<p><b>{{ o.amount|money }}</b> at {{ o.annual_rate|rate }} · {{ o.term_months }} mo term / {{ o.amortization_months }} mo amortization · received {{ o.received_on }} · <span class="badge">{{ 'expired' if o.expired else o.status }}</span></p>{% else %}<p class="muted">No offers yet.</p>{% endfor %}
+{% if sub.status in ('submitted', 'under_review', 'term_sheet') %}<details {% if not sub.offers %}open{% endif %}><summary>Record an offer / term sheet</summary>
+<form method="post" action="/deals/{{ deal.id }}/submissions/{{ sub.id }}/offer">{{ csrf() }}
+<div class="row"><div><label>Received *</label><input type="date" name="received_on" required max="{{ today }}"></div><div><label>Amount *</label><input type="text" name="amount" required></div>
+<div><label>Rate % *</label><input type="text" name="annual_rate" required></div><div><label>Rate type</label><select name="rate_type"><option>fixed</option><option>variable</option></select></div></div>
+<div class="row"><div><label>Index</label><input type="text" name="index_name"></div><div><label>Spread %</label><input type="text" name="spread"></div>
+<div><label>Term (months) *</label><input type="number" name="term_months" required min="1"></div><div><label>Amortization (months) *</label><input type="number" name="amortization_months" required min="1"></div></div>
+<div class="row"><div><label>Interest-only months</label><input type="number" name="interest_only_months" value="0" min="0"></div><div><label>Payments</label><select name="payment_frequency"><option>monthly</option><option>quarterly</option><option>semiannual</option><option>annual</option></select></div>
+<div><label>Origination fee $</label><input type="text" name="origination_fee" value="0"></div><div><label>Other fees $</label><input type="text" name="other_fees" value="0"></div></div>
+<div class="row"><div><label>Expires</label><input type="date" name="expires_on"></div></div>
+<label>Prepayment terms</label><input type="text" name="prepayment_terms"><label>Covenants</label><textarea name="covenants"></textarea>
+<p><button class="small">Save offer exactly as received</button></p></form></details>{% endif %}
+{% if sub.offers %}<p><a href="/deals/{{ deal.id }}/offers/compare">Compare and decide →</a></p>{% endif %}
+</div></div>
+{% endblock %}

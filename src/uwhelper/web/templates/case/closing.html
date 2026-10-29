@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Closing · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="info-box">This workspace tracks closing prerequisites. It does <b>not</b> produce legally sufficient documents, execute agreements,
+move money or release funds. Checklists come from the case policy; legal review is your counsel's responsibility.</div>
+{% if case.stage == 'CLOSING' %}
+<div class="panel"><h2 style="margin-top:0">Funding prerequisites</h2>
+{% if blockers %}<ul>{% for b in blockers %}<li class="{{ 'blocker-hard' if b.hard else 'blocker-soft' }}">{{ '✖' if b.hard else '⚠' }} {{ b.message }}{% if b.link %} — <a href="{{ b.link }}">go</a>{% endif %}</li>{% endfor %}</ul>
+{% else %}<p>✔ All funding prerequisites recorded.</p>{% endif %}
+<p><a class="btn" href="/cases/{{ case.id }}/funding">Go to funding confirmation</a></p></div>
+{% endif %}
+{% if funding %}<div class="panel"><b>Funded:</b> {{ funding.funded_amount|money(2) }} on {{ funding.funding_date }} — confirmed by {{ funding.confirmed_by }} ({{ funding.created_at }}). First payment {{ funding.first_payment_date }}.</div>{% endif %}
+
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Closing record</h2>
+{% set cl = closing or {} %}
+<form method="post" action="/cases/{{ case.id }}/closing">{{ csrf() }}
+<label>Scheduled closing date</label><input type="date" name="scheduled_closing_date" value="{{ cl.scheduled_closing_date or '' }}">
+<label>Disbursement instructions (kept locally; only "changed" is written to the audit log)</label><textarea name="disbursement_instructions">{{ cl.disbursement_instructions or '' }}</textarea>
+<label>Disbursement status (as reported by you)</label><select name="disbursement_status">{% for s in ['NOT_STARTED','INSTRUCTIONS_RECORDED','REPORTED_DISBURSED'] %}<option {% if cl.disbursement_status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+<label>Outstanding issues</label><textarea name="outstanding_issues">{{ cl.outstanding_issues or '' }}</textarea>
+<label>Notes</label><textarea name="notes">{{ cl.notes or '' }}</textarea>
+{% if case.stage in ('DUE_DILIGENCE','CLOSING') %}<p><button>Save closing record</button></p>{% endif %}</form></div>
+<div class="panel"><h2 style="margin-top:0">Terms</h2>
+<p><b>Human-approved:</b> {% if approved %}{{ approved.principal|money }} @ {{ approved.annual_rate|rate }} {{ approved.rate_type }}, {{ approved.term_months }}/{{ approved.amortization_months }}/{{ approved.interest_only_months }} mo, {{ approved.payment_frequency }} (rev. {{ approved.revision }}, {{ approved.entered_by }}){% else %}none{% endif %}</p>
+<p><b>Executed:</b> {% for e in executed %}rev. {{ e.revision }}: {{ e.principal|money }} @ {{ e.annual_rate|rate }}, {{ e.term_months }}/{{ e.amortization_months }}/{{ e.interest_only_months }} mo ({{ e.entered_by }}){% if not loop.last %}; {% endif %}{% else %}not recorded{% endfor %}</p>
+{% if case.stage == 'CLOSING' %}<details {% if not executed %}open{% endif %}><summary>Record final executed terms</summary>
+<form method="post" action="/cases/{{ case.id }}/closing/executed-terms" data-confirm="Record executed terms as signed?">{{ csrf() }}
+{% set ts = executed[0] if executed else approved %}{% set ts_source_id = None %}{% include "_termset_fields.html" %}
+<label>Entered by *</label><input type="text" name="t_entered_by" required minlength="2">
+<p><button class="small">Record executed terms</button></p></form></details>{% endif %}</div>
+</div>
+
+<h2>Closing checklist (legal documents, signatures, insurance, funding prerequisites, final review)</h2>
+<table><tr><th>Code</th><th>Item</th><th>Category</th><th>Req.</th><th>Status</th><th></th></tr>
+{% for c in items %}<tr><td class="mono small">{{ c.code }}</td><td>{{ c.description }}</td><td class="small">{{ c.category.replace('_',' ') }}</td><td>{{ 'Required' if c.required else 'Optional' }}</td>
+<td><span class="badge {{ 'verified' if c.status in ('SATISFIED','WAIVED') else 'unverified' }}">{{ c.status.replace('_',' ') }}</span></td>
+<td class="small">{% if c.allowed %}<form method="post" action="/cases/{{ case.id }}/conditions/{{ c.id }}/status" class="actions">{{ csrf() }}<input type="hidden" name="next" value="/cases/{{ case.id }}/closing">
+<select name="to_status">{% for s in c.allowed %}<option>{{ s }}</option>{% endfor %}</select><input type="text" name="evidence_note" placeholder="evidence / signer" value="{{ c.evidence_note or '' }}">
+<label class="check"><input type="checkbox" name="verified"> verified</label><button class="small">Save</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No closing items — generate conditions from the policy on the Conditions page.</td></tr>{% endfor %}</table>
+<p class="small">Due-diligence: {{ dd_summary.DUE_DILIGENCE.closed }}/{{ dd_summary.DUE_DILIGENCE.total }} closed; {{ dd_summary.DUE_DILIGENCE.required_open|length }} required open.</p>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}System &amp; privacy{% endblock %}
+{% block content %}
+<h1>System &amp; privacy checks</h1>
+<table><tr><th>Check</th><th>Result</th><th>Detail</th></tr>
+{% for c in checks %}<tr><td>{{ c.name }}</td><td>{% if c.ok is none %}<span class="res res-na">ℹ info</span>{% elif c.ok %}<span class="res res-pass">✔ OK</span>{% else %}<span class="res res-fail">✖ Problem</span>{% endif %}</td><td class="small">{{ c.detail }}</td></tr>{% endfor %}
+</table>
+<div class="panel">
+<h2 style="margin-top:0">What stays local</h2>
+<ul>
+<li>The web app listens on <span class="mono">{{ settings.host }}:{{ settings.port }}</span> only (loopback).</li>
+<li>The only outbound connection the app makes is to Ollama at <span class="mono">{{ settings.ollama_url }}</span> (validated to be loopback; proxies ignored; redirects refused; cloud models refused).</li>
+<li>No telemetry, analytics, crash reporting, CDNs, web fonts or remote logging. All CSS/JS is served from this app.</li>
+<li>Documents, database and reports live in <span class="mono">{{ settings.data_dir }}</span>.</li>
+</ul>
+<p class="small">See <span class="mono">docs/SECURITY.md</span> for the threat model and remaining risks, and <span class="mono">docs/LOCAL_ONLY_CHECKLIST.md</span> to verify independently.</p>
+</div>
+{% endblock %}

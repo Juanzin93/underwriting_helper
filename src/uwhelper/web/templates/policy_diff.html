@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Compare policy versions{% endblock %}
+{% block content %}
+<p><a href="/policies">← Policies</a></p>
+<h1>Compare policy versions</h1>
+<form method="get" class="actions panel">
+<select name="a" aria-label="Older version">{% for p in policies %}<option value="{{ p.id }}" {% if p.id == a %}selected{% endif %}>{{ p.policy_key }} v{{ p.version }}</option>{% endfor %}</select>
+<span>→</span>
+<select name="b" aria-label="Newer version">{% for p in policies %}<option value="{{ p.id }}" {% if p.id == b %}selected{% endif %}>{{ p.policy_key }} v{{ p.version }}</option>{% endfor %}</select>
+<button class="small">Compare</button></form>
+{% if diff %}
+<h2>{{ diff.old }} → {{ diff.new }}</h2>
+{% macro changes(items) %}<table><tr><th>Field</th><th>Before</th><th>After</th></tr>{% for c in items %}<tr><td class="mono small">{{ c.field }}</td><td class="small">{{ c.old if c.old is not none else '—' }}</td><td class="small"><b>{{ c.new if c.new is not none else '—' }}</b></td></tr>{% endfor %}</table>{% endmacro %}
+{% if diff.header %}<h3>Policy header</h3>{{ changes(diff.header) }}{% endif %}
+<h3>Parameters</h3>{% if diff.parameters %}{{ changes(diff.parameters) }}{% else %}<p class="muted">No changes.</p>{% endif %}
+<h3>Rules</h3>
+{% for r in diff.rules_added %}<p><span class="badge verified">ADDED</span> <b>{{ r.id }}</b> v{{ r.version }} — {{ r.description }}</p>{% endfor %}
+{% for r in diff.rules_removed %}<p><span class="badge rejected">REMOVED</span> <b>{{ r.id }}</b> v{{ r.version }} — {{ r.description }}</p>{% endfor %}
+{% for r in diff.rules_changed %}<p><span class="badge candidate">CHANGED</span> <b>{{ r.id }}</b></p>{{ changes(r.changes) }}{% endfor %}
+{% if not (diff.rules_added or diff.rules_removed or diff.rules_changed) %}<p class="muted">No changes.</p>{% endif %}
+<h3>Conditions</h3>
+{% for c in diff.conditions_added %}<p><span class="badge verified">ADDED</span> <b>{{ c.code }}</b> — {{ c.description }}</p>{% endfor %}
+{% for c in diff.conditions_removed %}<p><span class="badge rejected">REMOVED</span> <b>{{ c.code }}</b> — {{ c.description }}</p>{% endfor %}
+{% for c in diff.conditions_changed %}<p><span class="badge candidate">CHANGED</span> <b>{{ c.code }}</b></p>{{ changes(c.changes) }}{% endfor %}
+{% if not (diff.conditions_added or diff.conditions_removed or diff.conditions_changed) %}<p class="muted">No changes.</p>{% endif %}
+<p class="small muted">Saved runs keep the version they used; a new version applies to new runs from its effective date.</p>
+{% endif %}
+{% endblock %}

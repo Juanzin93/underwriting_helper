@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Closing · {{ deal.deal_number }}{% endblock %}
+{% block content %}
+<p><a href="/deals/{{ deal.id }}">← {{ deal.deal_number }} · {{ deal.name }}</a></p>
+<h1>Conditions, due diligence, closing &amp; funding <span class="small muted">deal is {{ deal.status.replace('_',' ') }}</span></h1>
+{% if offer %}<p class="small">Accepted offer: <b>{{ offer.lender }}</b> · {{ offer.amount|money }} at {{ offer.annual_rate|rate }} · {{ offer.term_months }} / {{ offer.amortization_months }} months · accepted by {{ offer.decided_by }}</p>
+{% else %}<div class="warning-box">No accepted lender offer is recorded. Record and accept the offer under <a href="/deals/{{ deal.id }}#submissions">Lender submissions</a>.</div>{% endif %}
+
+<h2>What blocks the next step</h2>
+{% for r in readiness %}<div class="panel" style="padding:8px 12px"><b>→ {{ r.to_status.replace('_',' ') }}</b> <span class="small muted">({{ r.via }})</span>
+{% if r.blockers %}<ul>{% for b in r.blockers %}<li>{% if b.hard %}<span class="badge rejected">must fix</span>{% else %}<span class="badge candidate">resolve or override</span>{% endif %} <a href="{{ b.link }}">{{ b.message }}</a></li>{% endfor %}</ul>{% else %}<span class="badge verified">nothing blocking</span>{% endif %}</div>
+{% else %}<p class="muted">No gated next step from {{ deal.status.replace('_',' ') }}.</p>{% endfor %}
+<p class="small muted">"Resolve or override" items can be overridden with a documented reason (at least 20 characters) when changing the status; "must fix" items cannot.</p>
+
+<h2 id="conditions">Lender conditions</h2>
+<table><tr><th>Condition</th><th>Phase</th><th>Status</th><th>Due</th><th>Evidence / resolution</th><th></th></tr>
+{% for c in conditions %}<tr><td>{{ c.description }}{% if not c.required %} <span class="small muted">(optional)</span>{% endif %}<br><span class="small muted">{{ c.source }}{% if c.responsible %} · {{ c.responsible }}{% endif %}</span></td>
+<td class="small">{{ c.phase.replace('_',' ') }}</td>
+<td><span class="badge {{ {'satisfied':'verified','waived':'superseded','received':'candidate'}.get(c.status, '') }}">{{ c.status }}</span>{% if c.overdue %} <span class="badge rejected">OVERDUE</span>{% endif %}</td>
+<td class="small">{{ c.due_on or '—' }}</td>
+<td class="small">{{ c.original_filename or '' }}{% if c.resolved_by %}<br>{{ c.status }} by {{ c.resolved_by }}{% endif %}{% if c.resolution_note %}<br><span class="muted">{{ c.resolution_note }}</span>{% endif %}</td>
+<td>{% if c.status in ('open', 'received') %}<details><summary class="small">Update</summary>
+<form method="post" action="/deals/{{ deal.id }}/conditions/{{ c.id }}/update">{{ csrf() }}
+<select name="to_status" aria-label="New status">{% if c.status == 'open' %}<option value="received">received</option>{% else %}<option value="satisfied">satisfied</option><option value="open">return to open</option>{% endif %}<option value="waived">waived</option></select>
+<select name="document_id" aria-label="Evidence document"><option value="">— evidence document —</option>{% for d in deal.documents %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select>
+<input type="text" name="by" placeholder="Your name (satisfied / waived)" aria-label="By"><input type="text" name="note" placeholder="Note (reason for waiver or return)" aria-label="Note">
+<button class="small">Save</button></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No conditions recorded.</td></tr>{% endfor %}</table>
+<div class="grid2">
+<details class="panel"><summary>Add a condition</summary><form method="post" action="/deals/{{ deal.id }}/closing/condition">{{ csrf() }}
+<label>Condition *</label><input type="text" name="description" required minlength="3">
+<div class="row"><div><label>Phase</label><select name="phase"><option value="closing">closing</option><option value="due_diligence">due diligence</option><option value="post_closing">post closing</option></select></div>
+<div><label>Source</label><select name="source"><option>lender</option><option>broker</option><option>other</option></select></div>
+<div><label>Due</label><input type="date" name="due_on"></div><div><label>Responsible</label><input type="text" name="responsible"></div></div>
+{% if offer %}<input type="hidden" name="offer_id" value="{{ offer.id }}">{% endif %}
+<label class="check"><input type="checkbox" name="required" checked> required</label><p><button class="small">Add</button></p></form></details>
+<details class="panel"><summary>Paste conditions from the commitment (one per line)</summary><form method="post" action="/deals/{{ deal.id }}/closing/conditions-paste">{{ csrf() }}
+<textarea name="text" rows="6" required></textarea>{% if offer %}<input type="hidden" name="offer_id" value="{{ offer.id }}">{% endif %}
+<label>Phase</label><select name="phase"><option value="closing">closing</option><option value="due_diligence">due diligence</option></select>
+<p><button class="small">Add all</button></p></form></details></div>
+
+<h2 id="diligence">Due diligence</h2>
+<table><tr><th>Item</th><th>Vendor</th><th>Status</th><th>Ordered / due / received</th><th>Report</th><th></th></tr>
+{% for i in dd_items %}<tr><td>{{ i.item_type.replace('_',' ') }}{% if not i.required %} <span class="small muted">(optional)</span>{% endif %}{% if i.description %}<br><span class="small muted">{{ i.description }}</span>{% endif %}</td>
+<td class="small">{{ i.vendor_org or i.vendor_name or '—' }}</td>
+<td><span class="badge {{ {'reviewed':'verified','waived':'superseded','received':'candidate'}.get(i.status, '') }}">{{ i.status.replace('_',' ') }}</span>{% if i.overdue %} <span class="badge rejected">OVERDUE</span>{% endif %}</td>
+<td class="small">{{ i.ordered_on or '—' }} / {{ i.due_on or '—' }} / {{ i.received_on or '—' }}</td>
+<td class="small">{{ i.original_filename or '' }}{% if i.reviewed_by %}<br>{{ i.status }} by {{ i.reviewed_by }}{% endif %}{% if i.note %}<br><span class="muted">{{ i.note }}</span>{% endif %}</td>
+<td>{% if i.status not in ('reviewed', 'waived') %}<details><summary class="small">Update</summary>
+<form method="post" action="/deals/{{ deal.id }}/diligence/{{ i.id }}/update">{{ csrf() }}
+<select name="to_status" aria-label="New status">{% if i.status == 'not_ordered' %}<option value="ordered">ordered</option>{% elif i.status == 'ordered' %}<option value="received">received</option>{% else %}<option value="reviewed">reviewed</option><option value="ordered">re-order</option>{% endif %}<option value="waived">waived</option></select>
+<input type="date" name="on" max="{{ today }}" aria-label="Date"><input type="date" name="due_on" aria-label="Due date"><input type="text" name="vendor_name" placeholder="Vendor" aria-label="Vendor">
+<select name="document_id" aria-label="Report"><option value="">— report document —</option>{% for d in deal.documents %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select>
+<input type="text" name="by" placeholder="Your name (reviewed / waived)" aria-label="By"><input type="text" name="note" placeholder="Note" aria-label="Note"><button class="small">Save</button></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No due-diligence items.</td></tr>{% endfor %}</table>
+<details class="panel"><summary>Add a due-diligence item</summary><form method="post" action="/deals/{{ deal.id }}/closing/dd">{{ csrf() }}
+<div class="row"><div><label>Item *</label><select name="item_type">{% for t in dd_types %}<option value="{{ t }}">{{ t.replace('_',' ') }}</option>{% endfor %}</select></div>
+<div><label>Vendor organization</label><select name="vendor_organization_id"><option value="">—</option>{% for o in vendors %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></div>
+<div><label>…or vendor name</label><input type="text" name="vendor_name"></div><div><label>Due</label><input type="date" name="due_on"></div></div>
+<label>Description</label><input type="text" name="description"><label class="check"><input type="checkbox" name="required" checked> required</label><p><button class="small">Add</button></p></form></details>
+
+<h2 id="record">Closing record</h2>
+{% if funding %}<p class="small">Locked: the deal was funded.</p>{% endif %}
+<form method="post" action="/deals/{{ deal.id }}/closing/record" class="panel">{{ csrf() }}
+<div class="row"><div><label>Closing date</label><input type="date" name="closing_date" value="{{ closing.closing_date if closing and closing.closing_date else '' }}"></div>
+<div><label>Final amount ($)</label><input type="text" name="final_amount" value="{{ closing.final_amount if closing and closing.final_amount else (offer.amount if offer else '') }}"></div>
+<div><label>Final rate (%)</label><input type="text" name="final_annual_rate" value="{{ (closing.final_annual_rate|float * 100)|round(4) if closing and closing.final_annual_rate else ((offer.annual_rate|float * 100)|round(4) if offer else '') }}"></div>
+<div><label>Term (months)</label><input type="number" name="final_term_months" value="{{ closing.final_term_months if closing and closing.final_term_months else (offer.term_months if offer else '') }}"></div>
+<div><label>Amortization (months)</label><input type="number" name="final_amortization_months" value="{{ closing.final_amortization_months if closing and closing.final_amortization_months else (offer.amortization_months if offer else '') }}"></div>
+<div><label>Rate resets every (months, variable only)</label><input type="number" name="rate_reset_months" min="1" max="120" value="{{ closing.rate_reset_months if closing and closing.rate_reset_months else '' }}"></div></div>
+<label>Notes</label><textarea name="notes">{{ closing.notes if closing and closing.notes else '' }}</textarea>
+{% if not funding and deal.status in ('APPROVED','DUE_DILIGENCE','CLOSING') %}<p><button class="small">Save closing record</button></p>{% endif %}</form>
+{% for d in differences %}<p class="warning-box">Final {{ d.item }} differs from the accepted offer: {{ d.offer }} → {{ d.final }}.</p>{% endfor %}
+
+<h2 id="funding">Funding confirmation</h2>
+{% if funding %}<div class="panel"><p><b>{{ funding.funded_amount|money(2) }}</b> funded on {{ funding.funding_date }} — confirmed by <b>{{ funding.confirmed_by }}</b> ({{ funding.created_at[:16].replace('T',' ') }} UTC).</p>
+{% for d in funding.differences %}<p class="small">Differed from offer: {{ d.item }} {{ d.offer }} → {{ d.final }}</p>{% endfor %}{% if funding.override_reason %}<p class="small">Override: {{ funding.override_reason }}</p>{% endif %}</div>
+{% elif deal.status == 'CLOSING' %}
+<form method="post" action="/deals/{{ deal.id }}/closing/fund" class="panel" data-confirm="Record that this loan was funded? This cannot be undone.">{{ csrf() }}
+<div class="row"><div><label>Funded amount * ($)</label><input type="text" name="funded_amount" required value="{{ closing.final_amount if closing and closing.final_amount else (offer.amount if offer else '') }}"></div>
+<div><label>Funding date *</label><input type="date" name="funding_date" required max="{{ today }}"></div><div><label>Confirmed by *</label><input type="text" name="confirmed_by" required minlength="2"></div></div>
+<label>Type <span class="mono">{{ phrase }}</span> *</label><input type="text" name="confirmation_text" required autocomplete="off">
+<label>Override reason (only if items above are outstanding or terms differ)</label><input type="text" name="override_reason">
+<label>Notes</label><input type="text" name="notes">
+<p><button>Confirm funding</button></p><p class="small muted">Record this only after the lender has actually funded. The app moves no money.</p></form>
+{% else %}<p class="muted">Funding is confirmed once the deal is in CLOSING.</p>{% endif %}
+{% endblock %}

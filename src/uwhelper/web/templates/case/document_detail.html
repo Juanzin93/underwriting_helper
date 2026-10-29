@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, fact_badges %}
+{% block title %}{{ doc.original_filename }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p><a href="/cases/{{ case.id }}/documents">← Documents</a></p>
+<div class="panel">
+<h2 style="margin-top:0">{{ doc.original_filename }}</h2>
+<p class="small">SHA-256 <span class="mono">{{ doc.sha256 }}</span> · {{ doc.page_count or 0 }} page(s) · status <b>{{ doc.processing_status }}</b>
+{% if doc.processing_error %} — {{ doc.processing_error }}{% endif %} · <a href="/cases/{{ case.id }}/documents/{{ doc.id }}/file">download original</a></p>
+<div class="row">
+<form method="post" action="/cases/{{ case.id }}/documents/{{ doc.id }}/classify" class="actions">{{ csrf() }}
+<select name="doc_type" aria-label="Document type">{% for k, v in doc_types.items() %}<option value="{{ k }}" {% if doc.doc_type == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+<input type="text" name="period_label" value="{{ doc.period_label or '' }}" placeholder="Period label" style="width:120px">
+<input type="date" name="document_date" value="{{ doc.document_date or '' }}" aria-label="Document date" style="width:150px">
+<button class="small secondary" type="submit">Save classification</button></form>
+<form method="post" action="/cases/{{ case.id }}/documents/{{ doc.id }}/reprocess" class="actions">{{ csrf() }}
+<input type="password" name="password" placeholder="PDF password (if any)" autocomplete="off" style="width:170px">
+<button class="small secondary" type="submit">Re-process (text/OCR)</button></form>
+<form method="post" action="/cases/{{ case.id }}/extract" class="inline">{{ csrf() }}<input type="hidden" name="document_id" value="{{ doc.id }}"><button class="small" type="submit">Run local extraction</button></form>
+<form method="post" action="/cases/{{ case.id }}/documents/{{ doc.id }}/remove" class="inline" data-confirm="Remove this document from the case?">{{ csrf() }}<button class="small danger" type="submit">Remove</button></form>
+</div>
+</div>
+{% if pages %}
+<nav class="tabs" aria-label="Pages">{% for p in pages %}<a href="?page={{ p.page_number }}" class="{{ 'active' if current and p.page_number == current.page_number else '' }}">p.{{ p.page_number }}{% if p.text_source == 'ocr' %} (OCR){% endif %}{% if p.injection_suspected %} ⚠{% endif %}</a>{% endfor %}</nav>
+{% if current %}
+{% if current.injection_suspected %}<div class="danger-box"><b>Suspicious embedded instructions on this page</b> ({{ current.injection_patterns }}). This text is treated strictly as data;
+the model is told never to follow it, its output is schema-checked, and values must appear on the page. Review every value from this page carefully.</div>{% endif %}
+{% if current.text_source == 'ocr' %}<div class="warning-box">Text on this page came from OCR and may contain recognition errors. Compare against the page image.</div>{% endif %}
+{% if current.text_source == 'none' %}<div class="warning-box">No text could be extracted from this page (OCR status: {{ current.ocr_status }}).</div>{% endif %}
+<div class="grid2">
+<div><h3>Page image</h3>{% if doc.file_ext != '.txt' %}<img class="pageimg" src="/cases/{{ case.id }}/documents/{{ doc.id }}/pages/{{ current.page_number }}.png" alt="Rendered page {{ current.page_number }}">{% else %}<p class="muted">Text file — no image.</p>{% endif %}</div>
+<div><h3>Extracted text ({{ current.text_source.replace('_',' ') }}, {{ current.char_count }} chars)</h3><div class="pagetext">{{ current.text }}</div>
+<h3>Facts citing this page</h3>
+{% if page_facts %}<table><tr><th>Field</th><th class="num">Value</th><th>Status</th><th></th></tr>
+{% for f in page_facts %}<tr><td>{{ f.field_label }}{% if f.item_label %} — {{ f.item_label }}{% endif %}<br><span class="small muted">{{ f.period_label or '' }}</span></td><td class="num">{{ f|fact_value }}</td><td>{{ fact_badges(f) }}</td>
+<td>{% if f.status == 'candidate' %}<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/verify?next=/cases/{{ case.id }}/documents/{{ doc.id }}%3Fpage%3D{{ current.page_number }}" class="inline">{{ csrf() }}<button class="small">Verify</button></form>{% endif %}</td></tr>{% endfor %}
+</table>{% else %}<p class="muted small">None.</p>{% endif %}
+</div></div>
+{% endif %}
+{% else %}<p class="muted">No pages were extracted.</p>{% endif %}
+{% endblock %}

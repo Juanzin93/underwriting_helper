@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Property · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+{% macro doc_select() %}<label>Source document (optional)</label><select name="document_id"><option value="">—</option>{% for d in docs %}<option value="{{ d.id }}">{{ d.original_filename }} ({{ doc_types.get(d.doc_type, d.doc_type) }})</option>{% endfor %}</select>{% endmacro %}
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Rent rolls</h2>
+<table><tr><th>As of</th><th>Units</th><th class="num">Annual rent</th><th>Reconciled</th><th>Status</th></tr>
+{% for r in rolls %}<tr><td><a href="/cases/{{ case.id }}/property/rent-roll/{{ r.id }}">{{ r.as_of_date }}</a><br><span class="small muted">{{ r.source_name or '' }}</span></td><td>{{ r.computed_unit_count }}</td>
+<td class="num">{{ r.computed_annual_rent|money }}</td><td>{% if r.reconciled %}<span class="badge verified">yes</span>{% else %}<span class="badge unverified">no</span>{% endif %}</td>
+<td><span class="badge {{ {'verified':'verified','draft':'candidate','superseded':'superseded','rejected':'rejected'}[r.status] }}">{{ r.status }}</span>{% if r.verified_by %}<br><span class="small">{{ r.verified_by }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No rent roll yet.</td></tr>{% endfor %}</table>
+<details {% if not rolls %}open{% endif %}><summary>Import a rent roll (CSV)</summary>
+<form method="post" action="/cases/{{ case.id }}/property/rent-roll/preview?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data">
+<div class="row"><div><label>Rent roll date *</label><input type="date" name="as_of" required></div>
+<div style="flex:2 1 220px"><label>CSV file *</label><input type="file" name="file" accept=".csv,text/csv" required></div></div>
+<div class="row"><div><label>Total annual rent printed on the rent roll</label><input type="text" name="stated_annual_rent" placeholder="e.g. 1,284,000"></div>
+<div><label>Unit count printed</label><input type="text" name="stated_unit_count"></div></div>
+{{ doc_select() }}
+<p><button class="small">Preview</button></p></form>
+<p class="small muted">Columns: <span class="mono">unit</span> and <span class="mono">monthly_rent</span> or <span class="mono">annual_rent</span> (required); <span class="mono">tenant, square_feet, status, market_rent, lease_start, lease_end, month_to_month</span>. A rent roll can be verified only when its unit total matches the printed total within $1.</p></details>
+</div>
+<div class="panel"><h2 style="margin-top:0">Operating statements (T-12)</h2>
+<table><tr><th>Period</th><th class="num">EGI</th><th class="num">Op. expenses</th><th>Reconciled</th><th>Saved as</th></tr>
+{% for i in imports %}<tr><td>{{ i.period_months }} mo. to {{ i.period_end }}<br><span class="small muted">{{ i.source_name or '' }}</span></td>
+<td class="num">{{ i.totals.effective_gross_income|money }}</td><td class="num">{{ i.totals.property_operating_expenses|money }}</td>
+<td>{% if i.reconciled %}<span class="badge verified">yes</span>{% else %}<span class="badge unverified">no</span>{% endif %}</td>
+<td>{% if i.verified %}<span class="badge verified">verified</span><br><span class="small">{{ i.confirmed_by }}</span>{% else %}<span class="badge unverified">unverified</span>{% endif %}</td></tr>
+<tr><td colspan="5"><details><summary class="small">{{ i.lines|length }} line(s)</summary><table>{% for ln in i.lines %}<tr><td class="small">{{ ln.label }}</td><td class="num small">{{ ln.amount|money if ln.amount is not none else '—' }}</td><td class="small">{{ target_labels.get(ln.target, ln.target) }}{% if ln.target != ln.suggested %} <span class="muted">(changed from {{ target_labels.get(ln.suggested) }})</span>{% endif %}</td></tr>{% endfor %}</table></details></td></tr>
+{% else %}<tr><td colspan="5" class="muted">No statement imported yet.</td></tr>{% endfor %}</table>
+<details {% if not imports %}open{% endif %}><summary>Import an operating statement (CSV)</summary>
+<form method="post" action="/cases/{{ case.id }}/property/t12/preview?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data">
+<div class="row"><div><label>Period end *</label><input type="date" name="period_end" required></div><div><label>Months</label><input type="number" name="period_months" value="12" min="1" max="12"></div>
+<div style="flex:2 1 220px"><label>CSV file *</label><input type="file" name="file" accept=".csv,text/csv" required></div></div>
+<div class="row"><div><label>"Total income" printed (EGI)</label><input type="text" name="stated_income"></div><div><label>"Total expenses" printed</label><input type="text" name="stated_expenses"></div></div>
+{{ doc_select() }}
+<p><button class="small">Preview mapping</button></p></form>
+<p class="small muted">Columns: a description (<span class="mono">line / description / account</span>) and a <span class="mono">total</span> column, or monthly columns that are added up. Rows without amounts are treated as section headings (Income / Expenses).</p></details>
+</div></div>
+<p class="small muted">Totals from statements become user-entered facts for the period (see Financial data). Different values from other sources show up as contradictions; nothing is overwritten. Rent-roll metrics (occupancy, rollover, WALT) use the verified rent roll.</p>
+{% endblock %}

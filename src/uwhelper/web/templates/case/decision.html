@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Credit decision · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="info-box">A credit decision is a <b>human</b> act. The software records who decided, what they relied on (the underwriting run and memo),
+and the human-approved terms. It never decides, and decisions are never edited — a new decision supersedes the old one.</div>
+<p>Underwriting: <b>{{ run_state.reason }}</b>{% if memos %} · Latest memo v{{ memos[0].version }} (run #{{ memos[0].run_number }}){% else %} · <span class="badge unverified">no credit memo yet</span>{% endif %}</p>
+
+{% if case.stage in ('CREDIT_REVIEW','STRUCTURING','DUE_DILIGENCE','CLOSING') %}
+<div class="panel"><h2 style="margin-top:0">Record a human credit decision</h2>
+{% if not run_state.current %}<div class="danger-box">A decision needs a current verified-only underwriting run. Re-run the screening first.</div>{% else %}
+<form method="post" action="/cases/{{ case.id }}/decision" data-confirm="Record this credit decision? It cannot be edited afterwards.">{{ csrf() }}
+<div class="row"><div><label>Decision *</label><select name="decision"><option value="APPROVE">Approve</option><option value="APPROVE_WITH_CONDITIONS">Approve with conditions</option><option value="DEFER">Defer / request more information</option><option value="DECLINE">Decline</option></select></div>
+<div><label>Decided by (name) *</label><input type="text" name="decided_by" required minlength="2"></div>
+<div style="flex:2 1 300px"><label>Authority / committee note</label><input type="text" name="authority_note" placeholder="e.g. within personal lending authority"></div></div>
+<label>Rationale (required, ≥ 20 characters) *</label><textarea name="rationale" required minlength="20"></textarea>
+<label>Approval conditions (one per line; each becomes a required condition)</label><textarea name="conditions_text"></textarea>
+<h3>Human-approved terms (required for approvals)</h3>
+{% if prefill %}<p class="small">Pre-filled from structure — review every field.</p>{% endif %}
+{% set ts = prefill or (case.terms and {'principal': case.terms.requested_amount, 'annual_rate': case.terms.interest_rate, 'rate_type': case.terms.rate_type, 'term_months': case.terms.term_months, 'amortization_months': case.terms.amortization_months}) %}
+{% set ts_source_id = prefill_id %}{% include "_termset_fields.html" %}
+<label class="check"><input type="checkbox" name="confirm_human" required> I confirm this decision is made by a responsible human, not by the software.</label>
+<p><button type="submit">Record decision</button></p></form>{% endif %}</div>
+{% endif %}
+
+{% if case.stage == 'STRUCTURING' and latest_decision and latest_decision.decision in ('APPROVE','APPROVE_WITH_CONDITIONS') %}
+<div class="panel"><h2 style="margin-top:0">Revise approved terms (under decision of {{ latest_decision.decided_at[:10] }})</h2>
+<form method="post" action="/cases/{{ case.id }}/decision/approved-terms" data-confirm="Record a new approved-terms revision?">{{ csrf() }}
+{% set ts = prefill %}{% set ts_source_id = prefill_id %}{% include "_termset_fields.html" %}
+<label>Entered by (approving person) *</label><input type="text" name="t_entered_by" required minlength="2">
+<p><button type="submit">Record approved terms</button></p></form></div>
+{% endif %}
+
+<h2>Decision history</h2>
+<table><tr><th>When</th><th>Decision</th><th>By</th><th>Run</th><th>Rationale</th><th>Approved-terms analysis [CALC]</th></tr>
+{% for d in decisions %}<tr><td class="small">{{ d.decided_at }}</td><td><b>{{ d.decision.replace('_',' ') }}</b></td><td>{{ d.decided_by }}<br><span class="small">{{ d.authority_note or '' }}</span></td><td>#{{ d.run_number }}</td>
+<td class="small">{{ d.rationale }}{% if d.conditions_text %}<br><b>Conditions:</b> {{ d.conditions_text }}{% endif %}</td>
+<td class="small">{% set a = d.snapshot.approved_terms_analysis %}{% if a %}payment {{ a.level_payment|money(2) }}; max annual DS {{ a.max_annual_debt_service|money }}; lowest-year DSCR {{ a.dscr_minimum|ratio if a.dscr_minimum else 'n/a' }}; LTV {{ a.ltv|pct if a.ltv else 'n/a' }}{% else %}—{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No decisions recorded.</td></tr>{% endfor %}</table>
+
+<h2>Term layers</h2>
+<p class="small">Requested terms: revision {{ case.terms.revision if case.terms else '—' }} ({{ case.terms.requested_amount|money if case.terms else '—' }}) · simulated: see Structuring · approved and executed below · funded: see Closing &amp; funding.</p>
+<table><tr><th>Type</th><th>Rev</th><th class="num">Principal</th><th>Rate</th><th>Term/Amort/IO</th><th>Frequency</th><th>Fees</th><th>Entered by</th><th>When</th></tr>
+{% for t in term_sets %}<tr><td><b>{{ t.term_type|upper }}</b></td><td>{{ t.revision }}</td><td class="num">{{ t.principal|money }}</td><td>{{ t.annual_rate|rate }} {{ t.rate_type }}</td><td>{{ t.term_months }}/{{ t.amortization_months }}/{{ t.interest_only_months }}</td><td>{{ t.payment_frequency }}</td><td>{{ t.origination_fee|money }} + {{ t.other_costs|money }}</td><td>{{ t.entered_by }}</td><td class="small">{{ t.created_at }}</td></tr>
+{% else %}<tr><td colspan="9" class="muted">None.</td></tr>{% endfor %}</table>
+{% endblock %}

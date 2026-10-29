@@ -1,0 +1,11 @@
+# Runtime dependencies (all free / open source; see docs/LICENSING.md)
+fastapi>=0.110
+uvicorn>=0.27
+jinja2>=3.1
+python-multipart>=0.0.9
+pydantic>=2.6
+pyyaml>=6.0
+httpx>=0.27
+pypdfium2>=4.30,<6   # PDF reading/rendering (PDFium; BSD-3 / Apache-2.0)
+pillow>=10.4         # images for OCR and page previews (MIT-CMU)
+reportlab>=4.2,<6    # PDF writing: reports, memos, sample documents (BSD)

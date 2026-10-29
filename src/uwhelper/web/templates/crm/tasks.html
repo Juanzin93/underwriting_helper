@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% from "crm/_crm_macros.html" import task_table, task_form %}
+{% block title %}Tasks{% endblock %}
+{% block content %}
+<h1>Tasks</h1>
+<div class="kpi">
+<div><b>{{ counts.open }}</b><span>open</span></div>
+<div><b>{{ counts.overdue }}</b><span>overdue</span></div>
+<div><b>{{ counts.due_today }}</b><span>due today</span></div>
+</div>
+<form method="get" class="actions panel">
+<select name="view" aria-label="View">{% for v in views %}<option value="{{ v }}" {% if v == view %}selected{% endif %}>{{ {'open':'Open','overdue':'Overdue','today':'Due today or earlier','week':'Due within 7 days','done':'Done / cancelled','all':'All'}[v] }}</option>{% endfor %}</select>
+<input type="text" name="assignee" value="{{ assignee }}" placeholder="Assignee" aria-label="Assignee"><button class="small secondary">Show</button></form>
+{{ task_table(tasks, '/tasks?view=' ~ view) }}
+<div class="panel">{{ task_form('/tasks', deals=deals) }}</div>
+{% if overdue.dd_items or overdue.conditions %}<h2>Overdue due diligence and conditions</h2>
+<table><tr><th>Deal</th><th>Item</th><th>Status</th><th>Due</th></tr>
+{% for i in overdue.dd_items %}<tr><td><a href="/deals/{{ i.deal_id }}/closing#diligence">{{ i.deal_number }}</a> {{ i.deal_name }}</td><td>{{ i.item_type.replace('_',' ') }}{% if i.vendor_name %} · {{ i.vendor_name }}{% endif %}</td><td>{{ i.status.replace('_',' ') }}</td><td><span class="badge rejected">{{ i.due_on }}</span></td></tr>{% endfor %}
+{% for c in overdue.conditions %}<tr><td><a href="/deals/{{ c.deal_id }}/closing#conditions">{{ c.deal_number }}</a> {{ c.deal_name }}</td><td>{{ c.description }}</td><td>{{ c.status }}</td><td><span class="badge rejected">{{ c.due_on }}</span></td></tr>{% endfor %}</table>{% endif %}
+<p class="small muted">Dates use this PC's local calendar. Tasks are reminders only — nothing is sent or scheduled outside the app.</p>
+{% endblock %}

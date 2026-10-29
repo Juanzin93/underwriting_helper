@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Lenders{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between"><h1>Lender programs</h1>
+<a class="btn secondary small" href="/lenders/import">Import catalog (YAML)…</a></div>
+<p class="small muted">Criteria are versioned: a change creates a new version and old matchings keep citing the version they used. Criteria confirmed more than {{ max_age }} days ago are flagged stale.</p>
+<table><tr><th>Lender</th><th>Program</th><th>Deal types</th><th>Products</th><th class="num">Amount range</th><th>Criteria</th><th>Confirmed</th></tr>
+{% for p in programs %}<tr><td><a href="/organizations/{{ p.organization_id }}">{{ p.lender_name }}</a></td>
+<td><a href="/lenders/programs/{{ p.id }}">{{ p.name }}</a>{% if not p.active %} <span class="badge superseded">inactive</span>{% endif %}</td>
+<td class="small">{{ p.deal_types|join(', ') or 'any' }}</td><td class="small">{{ p.product_types|join(', ')|replace('_',' ') or 'any' }}</td>
+<td class="num small">{{ p.min_amount|money if p.min_amount else '—' }} – {{ p.max_amount|money if p.max_amount else '—' }}</td>
+<td>{% if p.latest_version %}v{{ p.latest_version }}{% else %}<span class="badge unverified">none</span>{% endif %}</td>
+<td class="small">{% if p.latest_verified_at %}{{ p.latest_verified_at }}{% if p.stale %} <span class="badge rejected">STALE ({{ p.age_days }} d)</span>{% endif %}{% else %}—{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No lender programs yet. Import the fictional example from <span class="mono">samples/lender_catalog_example.yaml</span> or add one below.</td></tr>{% endfor %}</table>
+<p><a class="small" href="?inactive={{ '0' if show_all else '1' }}">{{ 'Hide' if show_all else 'Show' }} inactive programs</a></p>
+<details class="panel" {% if not programs %}open{% endif %}><summary>New program</summary>
+{% if not orgs %}<p class="warning-box">First create the lender as an organization of type <b>lender</b> (Organizations → New organization).</p>{% endif %}
+<form method="post" action="/lenders/programs">{{ csrf() }}
+<div class="row"><div><label>Lender *</label><select name="organization_id" required>{% for o in orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></div>
+<div style="flex:2 1 240px"><label>Program name *</label><input type="text" name="name" required minlength="2"></div></div>
+{% include "lenders/_program_fields.html" %}
+<p><button class="small">Create program</button></p></form></details>
+{% endblock %}

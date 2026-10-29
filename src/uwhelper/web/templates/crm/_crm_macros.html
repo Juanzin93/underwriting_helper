@@ -1,0 +1,64 @@
+{% from "_macros.html" import csrf %}
+
+{% macro task_table(tasks, back, show_links=True) -%}
+<table><tr><th>Task</th><th>Due</th><th>Priority</th>{% if show_links %}<th>For</th>{% endif %}<th>Assignee</th><th></th></tr>
+{% for t in tasks %}<tr>
+<td>{% if t.status != 'open' %}<s>{{ t.title }}</s> <span class="badge superseded">{{ t.status }}</span>{% else %}{{ t.title }}{% endif %}
+{% if t.description %}<br><span class="small muted">{{ t.description }}</span>{% endif %}</td>
+<td class="small">{% if t.due_date %}{{ t.due_date }}{% if t.overdue %} <span class="badge rejected">OVERDUE</span>{% endif %}{% else %}—{% endif %}</td>
+<td class="small">{% if t.priority == 'high' %}<span class="badge candidate">high</span>{% else %}{{ t.priority }}{% endif %}</td>
+{% if show_links %}<td class="small">{% if t.deal_id %}<a href="/deals/{{ t.deal_id }}">{{ t.deal_number }}</a> {% endif %}{% if t.contact_id %}<a href="/contacts/{{ t.contact_id }}">{{ t.contact_name }}</a> {% endif %}{% if t.organization_id %}<a href="/organizations/{{ t.organization_id }}">{{ t.organization_name }}</a>{% endif %}</td>{% endif %}
+<td class="small">{{ t.assignee or '' }}</td>
+<td>{% if t.status == 'open' %}<form method="post" action="/tasks/{{ t.id }}/done" class="inline">{{ csrf() }}<input type="hidden" name="next" value="{{ back }}"><button class="small">Done</button></form>
+<form method="post" action="/tasks/{{ t.id }}/cancel" class="inline">{{ csrf() }}<input type="hidden" name="next" value="{{ back }}"><button class="small secondary">Cancel</button></form>
+{% else %}<form method="post" action="/tasks/{{ t.id }}/reopen" class="inline">{{ csrf() }}<input type="hidden" name="next" value="{{ back }}"><button class="small secondary">Reopen</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No tasks.</td></tr>{% endfor %}</table>
+{%- endmacro %}
+
+{% macro task_form(back, deal_id=None, contact_id=None, organization_id=None, deals=None) -%}
+<details><summary>Add task</summary>
+<form method="post" action="/tasks">{{ csrf() }}<input type="hidden" name="next" value="{{ back }}">
+{% if deal_id %}<input type="hidden" name="deal_id" value="{{ deal_id }}">{% endif %}
+{% if contact_id %}<input type="hidden" name="contact_id" value="{{ contact_id }}">{% endif %}
+{% if organization_id %}<input type="hidden" name="organization_id" value="{{ organization_id }}">{% endif %}
+<div class="row"><div style="flex:2 1 240px"><label>Task *</label><input type="text" name="title" required minlength="2" maxlength="200"></div>
+<div><label>Due</label><input type="date" name="due_date"></div>
+<div><label>Priority</label><select name="priority"><option>normal</option><option>high</option><option>low</option></select></div>
+<div><label>Assignee</label><input type="text" name="assignee" maxlength="120"></div></div>
+{% if deals is not none %}<label>Deal</label><select name="deal_id"><option value="">—</option>{% for d in deals %}<option value="{{ d.id }}">{{ d.deal_number }} · {{ d.name }}</option>{% endfor %}</select>{% endif %}
+<label>Details</label><textarea name="description" maxlength="5000"></textarea>
+<p><button class="small">Add task</button></p></form></details>
+{%- endmacro %}
+
+{% macro activity_form(back, deal_id=None, contact_id=None, organization_id=None) -%}
+<details><summary>Log a note, call, email or meeting</summary>
+<form method="post" action="/activities">{{ csrf() }}<input type="hidden" name="next" value="{{ back }}">
+{% if deal_id %}<input type="hidden" name="deal_id" value="{{ deal_id }}">{% endif %}
+{% if contact_id %}<input type="hidden" name="contact_id" value="{{ contact_id }}">{% endif %}
+{% if organization_id %}<input type="hidden" name="organization_id" value="{{ organization_id }}">{% endif %}
+<div class="row"><div><label>Type</label><select name="kind"><option>note</option><option>call</option><option>email</option><option>meeting</option><option>other</option></select></div>
+<div style="flex:2 1 240px"><label>Subject *</label><input type="text" name="subject" required minlength="2" maxlength="200"></div>
+<div><label>When (local time; blank = now)</label><input type="datetime-local" name="occurred_at"></div></div>
+<label>Details</label><textarea name="body" maxlength="20000"></textarea>
+<p class="small muted">Notes are permanent: to fix one, add a correction (the original stays visible as superseded). Emails are logged by hand — nothing is sent.</p>
+<p><button class="small">Save</button></p></form></details>
+{%- endmacro %}
+
+{% macro activity_list(items, back, deal_id=None, contact_id=None, organization_id=None) -%}
+{% for a in items %}<div class="panel" style="padding:8px 12px;margin:6px 0">
+<div class="small muted">{{ a.occurred_at[:16].replace('T',' ') }} UTC · {{ a.kind }} · {{ a.actor }}{% if a.corrects_activity_id %} · correction{% endif %}{% if a.superseded %} · <span class="badge superseded">SUPERSEDED</span>{% endif %}</div>
+<b>{{ a.subject }}</b>{% if a.body %}<div style="white-space:pre-wrap">{{ a.body }}</div>{% endif %}
+{% if not a.superseded %}<details><summary class="small">Correct</summary>
+<form method="post" action="/activities">{{ csrf() }}<input type="hidden" name="next" value="{{ back }}"><input type="hidden" name="corrects_activity_id" value="{{ a.id }}"><input type="hidden" name="kind" value="{{ a.kind }}">
+{% if deal_id %}<input type="hidden" name="deal_id" value="{{ deal_id }}">{% endif %}{% if contact_id %}<input type="hidden" name="contact_id" value="{{ contact_id }}">{% endif %}{% if organization_id %}<input type="hidden" name="organization_id" value="{{ organization_id }}">{% endif %}
+<input type="hidden" name="occurred_at" value="">
+<label>Subject</label><input type="text" name="subject" value="{{ a.subject }}" required minlength="2"><label>Details</label><textarea name="body">{{ a.body or '' }}</textarea>
+<button class="small secondary">Save correction</button></form></details>{% endif %}
+</div>{% else %}<p class="muted">No activity logged.</p>{% endfor %}
+{%- endmacro %}
+
+{% macro pager(items, limit, offset, base_query) -%}
+{% if offset or items|length >= limit %}<p class="actions">{% if offset %}<a class="btn secondary small" href="?{{ base_query }}&offset={{ [offset - limit, 0]|max }}">← Previous</a>{% endif %}
+<span class="small muted">Showing {{ offset + 1 if items else 0 }}–{{ offset + items|length }}</span>
+{% if items|length >= limit %}<a class="btn secondary small" href="?{{ base_query }}&offset={{ offset + limit }}">Next →</a>{% endif %}</p>{% endif %}
+{%- endmacro %}

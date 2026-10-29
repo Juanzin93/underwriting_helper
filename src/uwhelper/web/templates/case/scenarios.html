@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, metric_value %}
+{% block title %}Scenarios · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="info-box">Scenarios run on a copy of the inputs. The base case, its facts and its runs are never modified.</div>
+<div class="panel">
+<h2 style="margin-top:0">New scenario</h2>
+<form method="post" action="/cases/{{ case.id }}/scenarios">{{ csrf() }}
+<div class="row"><div><label>Name *</label><input type="text" name="name" required placeholder="Downside: revenue −15%, +200 bps"></div>
+<div style="flex:2 1 300px"><label>Description</label><input type="text" name="description"></div></div>
+<div class="row">
+<div><label>Revenue change (%)</label><input type="text" name="revenue_change_pct" placeholder="-15"></div>
+<div><label>Operating expense change (%)</label><input type="text" name="opex_change_pct" placeholder="5"></div>
+<div><label>Rate change (bps, proposed loan)</label><input type="number" name="rate_change_bps" value="0"></div>
+<div><label>Loan amount override</label><input type="text" name="loan_amount_override"></div>
+<div><label>Rate override (%)</label><input type="text" name="interest_rate_override"></div>
+<div><label>Amortization override (months)</label><input type="number" name="amortization_months_override" min="1" max="600"></div>
+<div><label>Mode</label><select name="mode"><option value="verified_only">Verified only</option><option value="include_unverified">Include unverified (flagged)</option></select></div>
+</div>
+<p><button type="submit">Save &amp; evaluate scenario</button></p>
+<p class="small muted">Assumptions: COGS moves with revenue, other costs fixed; tax effects ignored; rate changes apply to the proposed loan only.</p>
+</form></div>
+
+<h2>Comparison</h2>
+{% if not base %}<p class="muted">Run the base case first.</p>{% else %}
+<table>
+<tr><th>Metric</th><th class="num">Base (run #{{ base.run_number }})</th>{% for c in compared %}<th class="num">{{ c.scenario.name }} (run #{{ c.run.run_number }})</th>{% endfor %}</tr>
+{% for k in compare_keys %}{% set bm = base.metrics_by_key.get(k) %}{% if bm and bm.status != 'not_applicable' %}
+<tr><td>{{ bm.label }}</td><td class="num">{{ metric_value(bm) }}</td>{% for c in compared %}<td class="num">{{ metric_value(c.run.metrics_by_key.get(k)) }}</td>{% endfor %}</tr>{% endif %}{% endfor %}
+<tr><td><b>Screening status</b></td><td>{{ base.overall_status.replace('_',' ') }}</td>{% for c in compared %}<td>{{ c.run.overall_status.replace('_',' ') }}</td>{% endfor %}</tr>
+</table>
+{% if scenarios %}<h3>Saved scenarios</h3><table><tr><th>Name</th><th>Adjustments</th><th>Created</th><th></th></tr>
+{% for s in scenarios %}<tr><td>{{ s.name }}<br><span class="small muted">{{ s.description or '' }}</span></td><td class="small mono">{% for k, v in s.adjustments.items() if v not in (None, '0', 0) %}{{ k }}={{ v }} {% endfor %}</td><td class="small">{{ s.created_at[:16] }}</td>
+<td><form method="post" action="/cases/{{ case.id }}/run" class="inline">{{ csrf() }}<input type="hidden" name="scenario_id" value="{{ s.id }}"><input type="hidden" name="next" value="scenarios"><button class="small secondary">Re-run on current data</button></form></td></tr>{% endfor %}</table>{% endif %}
+
+{% set sens = base.summary.sensitivity %}
+{% if sens %}
+<h2>Sensitivity — {{ sens.metric|upper }} (base run #{{ base.run_number }})</h2>
+<table class="sens"><tr><th>Revenue change</th>{% for b in sens.rate_shocks_bps %}<th>+{{ b }} bps</th>{% endfor %}</tr>
+{% for row in sens.revenue_rows %}<tr><th>{{ row.revenue_change_pct|pct }}</th>{% for c in row.cells %}<td class="{{ 'below' if c.dscr and (c.dscr|float) < 1.0 else '' }}">{{ c.dscr|ratio if c.dscr else 'n/c' }}</td>{% endfor %}</tr>{% endfor %}
+</table>
+<table class="sens" style="max-width:420px; margin-top:8px"><tr><th>Operating expense change</th><th>{{ sens.metric|upper }}</th></tr>
+{% for e in sens.expense_rows %}<tr><th>+{{ e.opex_change_pct|pct }}</th><td class="{{ 'below' if e.dscr and (e.dscr|float) < 1.0 else '' }}">{{ e.dscr|ratio if e.dscr else 'n/c' }}</td></tr>{% endfor %}</table>
+<p class="small muted">▼ = below 1.00x (cash flow does not cover debt service). n/c = not calculable from available inputs. {{ sens.assumptions|join(' ') }}</p>
+{% endif %}
+{% endif %}
+{% endblock %}

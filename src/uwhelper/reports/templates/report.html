@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Preliminary Credit Analysis — {{ case.case_number }} — v{{ report_version }}</title>
+{% if not for_pdf %}
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #111; max-width: 1050px; margin: 24px auto; padding: 0 16px; font-size: 14px; line-height: 1.4; }
+  h1 { font-size: 24px; margin-bottom: 2px; } h2 { font-size: 18px; border-bottom: 2px solid #333; padding-bottom: 3px; margin-top: 28px; }
+  h3 { font-size: 15px; margin: 14px 0 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 14px; }
+  th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 13px; }
+  th { background: #eef0f3; }
+  .banner { border: 3px solid #111; padding: 10px; font-weight: 600; background: #fffbe6; }
+  .small { font-size: 12px; color: #444; }
+  .tag { display: inline-block; border: 1px solid #666; border-radius: 3px; padding: 0 4px; font-size: 11px; margin: 1px; }
+  .narrative { border: 2px dashed #777; padding: 10px; background: #f7f7f7; }
+  @media print { body { margin: 0; } h2 { page-break-after: avoid; } }
+</style>
+{% endif %}
+</head>
+<body>
+<h1>Preliminary Credit Analysis</h1>
+<p class="small">Case {{ case.case_number }} · Report version {{ report_version }} · Generated {{ generated_at }} ·
+Underwriting run #{{ run.run_number }} ({{ run.created_at }}) · Run mode: {{ run.mode }} ·
+Engine {{ engine_version }} · App {{ app_version }} · Inputs SHA-256 {{ run.inputs_sha256[:16] }}…</p>
+
+<p class="banner">PRELIMINARY SCREENING — NOT A CREDIT DECISION. {{ overall_text }}
+{% if run.illustrative %} Policy thresholds are ILLUSTRATIVE demo values.{% endif %}
+{% if evidence_insufficient %} The evidence is insufficient for a complete screening; see “Questions requiring follow-up”.{% endif %}</p>
+
+<p class="small">Value labels used in this report: <b>VERIFIED</b> = observed in a source and confirmed by the user;
+<b>UNVERIFIED</b> = AI-extracted or user-entered but not confirmed; <b>CALCULATED</b> = deterministic Python calculation;
+<b>ASSUMPTION</b> = user/policy assumption; <b>MODEL-GENERATED</b> = local language model text (not authoritative).</p>
+
+<h2>1. Case overview</h2>
+<table>
+<tr><th>Case title</th><td>{{ case.title }}</td><th>Loan type</th><td>{{ loan_type_label }}</td></tr>
+<tr><th>Status</th><td>{{ case.status }}</td><th>Policy</th><td>{{ run.policy_name }} v{{ run.policy_version }}{% if run.illustrative %} (illustrative){% endif %}</td></tr>
+<tr><th>Base period</th><td>{{ run.base_period_label or "None — not determinable" }}</td><th>Scenario</th><td>{{ run.scenario_name or "Base case" }}</td></tr>
+</table>
+
+<h2>2. Borrower and requested financing</h2>
+<table>
+<tr><th>Legal name</th><td>{{ case.borrower.legal_name }}</td><th>Entity type</th><td>{{ case.borrower.entity_type or "—" }}</td></tr>
+<tr><th>Industry</th><td>{{ case.borrower.industry or "—" }} {% if case.borrower.naics_code %}(NAICS {{ case.borrower.naics_code }}){% endif %}</td><th>Established</th><td>{{ case.borrower.year_established or "—" }}</td></tr>
+</table>
+{% set t = case.terms %}
+{% if t %}
+<table>
+<tr><th>Requested amount (ASSUMPTION: proposed terms)</th><td>{{ t.requested_amount|money }}</td><th>Purpose</th><td>{{ t.loan_purpose or "—" }}</td></tr>
+<tr><th>Rate</th><td>{{ t.interest_rate|rate }} {{ t.rate_type }}</td><th>Repayment</th><td>{{ t.repayment_type }}; term {{ t.term_months or "—" }} mo; amortization {{ t.amortization_months or "—" }} mo</td></tr>
+<tr><th>Secured</th><td>{{ "Yes" if t.is_secured else "No" }}</td><th>Project cost</th><td>{{ t.project_total_cost|money }}</td></tr>
+<tr><th>Requested closing</th><td>{{ t.requested_closing_date or "—" }}</td><th>Terms revision</th><td>{{ t.revision }}</td></tr>
+</table>
+{% else %}<p><b>No proposed loan terms entered.</b></p>{% endif %}
+{% if parties %}
+<h3>Owners and guarantors</h3>
+<table><tr><th>Name</th><th>Type</th><th>Ownership</th><th>Guarantor</th></tr>
+{% for p in parties %}<tr><td>{{ p.name }}</td><td>{{ p.party_type }}</td><td>{{ p.ownership_pct ~ "%" if p.ownership_pct else "—" }}</td><td>{{ p.guarantee_type if p.is_guarantor else "No" }}</td></tr>{% endfor %}
+</table>{% endif %}
+{% if collateral %}
+<h3>Collateral</h3>
+<table><tr><th>Description</th><th>Type</th><th>Lien</th><th>Prior liens</th><th>Value</th><th>Date</th><th>Method</th><th>Status</th></tr>
+{% for c in collateral %}{% set v = c.current_valuation %}
+<tr><td>{{ c.description }}</td><td>{{ c.collateral_type }}</td><td>{{ c.lien_position }}</td><td>{{ c.prior_lien_balance|money }}</td>
+<td>{{ v.value|money if v else "—" }}</td><td>{{ v.valuation_date if v else "—" }}</td><td>{{ v.valuation_method if v else "—" }}</td><td>{{ (v.verification_status|upper) if v else "MISSING" }}</td></tr>{% endfor %}
+</table>{% endif %}
+
+<h2>3. Documents reviewed</h2>
+{% if documents %}
+<table><tr><th>File</th><th>Type</th><th>Pages</th><th>Text source</th><th>Processing</th><th>SHA-256</th></tr>
+{% for d in documents %}<tr><td>{{ d.original_filename }}</td><td>{{ doc_types.get(d.doc_type, d.doc_type) }}</td><td>{{ d.page_count or "—" }}</td>
+<td>{{ d.ocr_pages }} OCR page(s){% if d.injection_flags %}; {{ d.injection_flags }} page(s) with suspicious embedded instructions{% endif %}</td>
+<td>{{ d.processing_status }}</td><td class="small">{{ d.sha256[:16] }}…</td></tr>{% endfor %}
+</table>{% else %}<p><b>No documents on file.</b></p>{% endif %}
+{% if missing_docs %}<p><b>Missing required documents:</b> {{ missing_docs|join(", ") }}.</p>{% endif %}
+
+<h2>4. Reporting periods and data limitations</h2>
+{% if periods %}<p>Periods on file: {% for p in periods %}{{ p.label }}{% if not loop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+<p>Base period used: <b>{{ run.base_period_label or "none" }}</b>. Balance sheet: {{ run.inputs.balance_sheet_label or "none" }}.</p>
+<ul>{% for f in run.findings if f.finding_type in ("assumption", "data_quality", "stale") %}<li>{{ f.message }}</li>{% else %}<li>No period or data-quality notes recorded.</li>{% endfor %}</ul>
+
+<h2>5. Key financial figures (CALCULATED from inputs)</h2>
+<table><tr><th>Figure</th><th>Value</th><th>Status</th><th>Flags</th></tr>
+{% for m in key_figures %}<tr><td>{{ m.label }}</td><td>{{ m.value|fmtval(m.unit) }}</td><td>{{ STATUS_TEXT.get(m.status, m.status) }}</td>
+<td>{% for f in m.flags %}<span class="tag">{{ f|flag_label }}</span>{% endfor %}</td></tr>{% endfor %}
+</table>
+
+<h2>6. Financial ratios with formulas and inputs</h2>
+{% for m in ratios %}
+<h3>{{ m.label }}: {% if m.status == "computed" %}{{ m.value|fmtval(m.unit) }}{% else %}{{ STATUS_TEXT.get(m.status, m.status) }}{% endif %}</h3>
+<p class="small">Formula: {{ m.formula }}<br>{{ m.explanation }}{% if m.flags %}<br>Flags: {% for f in m.flags %}{{ f|flag_label }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+{% if m.inputs %}<table><tr><th>Input</th><th>Value</th><th>State</th><th>Basis</th></tr>
+{% for i in m.inputs %}<tr><td>{{ i.label }}</td><td>{{ i.value|money(2) if i.value is not none else "—" }}</td><td>{{ i.state }}</td>
+<td>{% if i.state != "ok" %}{{ i.state|upper }}{% else %}{{ "VERIFIED" if i.verified and "proposed_terms" not in i.flags and "policy_parameter" not in i.flags else ("ASSUMPTION" if ("proposed_terms" in i.flags or "policy_parameter" in i.flags) else "UNVERIFIED") }}{% endif %}{% if "derived" in i.flags %} · CALCULATED{% endif %}</td></tr>{% endfor %}
+</table>{% endif %}
+{% endfor %}
+
+<h2>7. Underwriting findings (policy screening)</h2>
+<p class="small">Policy {{ run.policy_key }} v{{ run.policy_version }}. {{ run.summary.policy.disclaimer }}</p>
+<table><tr><th>Rule</th><th>Result</th><th>Observed</th><th>Requirement</th><th>Explanation</th><th>Evidence</th></tr>
+{% for e in run.evaluations %}<tr><td>{{ e.rule_id }} v{{ e.rule_version }}<br><span class="small">{{ e.description }} ({{ e.severity }})</span></td>
+<td><b>{{ e.result|result_label }}</b>{% if e.indicative_result %}<br><span class="small">would be {{ e.indicative_result }}</span>{% endif %}</td>
+<td>{{ e.observed_value or "—" }}</td><td>{{ (e.operator ~ " " ~ e.threshold) if e.threshold else "—" }}</td><td class="small">{{ e.explanation }}</td>
+<td class="small">{% for ev in e.evidence %}{{ ev.original_filename or "user entry" }}{% if ev.page_number %} p.{{ ev.page_number }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</td></tr>{% endfor %}
+</table>
+
+<h2>8. Source references</h2>
+<table><tr><th>Field</th><th>Period</th><th>Value</th><th>Source</th><th>Page</th><th>Status</th></tr>
+{% for f in verified_facts %}<tr><td>{{ f.field_label }}{% if f.item_label %} — {{ f.item_label }}{% endif %}</td><td>{{ f.period_label or "—" }}</td><td>{{ f|fact_value }}</td>
+<td>{{ f.original_filename or SOURCE_LABELS.get(f.source_type) }}</td><td>{{ f.page_number or "—" }}</td><td>VERIFIED ({{ SOURCE_LABELS.get(f.source_type) }})</td></tr>
+{% else %}<tr><td colspan="6">No verified facts.</td></tr>{% endfor %}
+</table>
+
+<h2>9. Unverified and conflicting information</h2>
+<h3>Unverified facts ({{ unverified_facts|length }})</h3>
+{% if unverified_facts %}<table><tr><th>Field</th><th>Period</th><th>Value</th><th>Source</th><th>Page</th></tr>
+{% for f in unverified_facts %}<tr><td>{{ f.field_label }}</td><td>{{ f.period_label or "—" }}</td><td>{{ f|fact_value }}</td><td>{{ f.original_filename or SOURCE_LABELS.get(f.source_type) }}</td><td>{{ f.page_number or "—" }}</td></tr>{% endfor %}
+</table>{% else %}<p>None.</p>{% endif %}
+<h3>Contradictions ({{ contradictions|length }})</h3>
+{% for c in contradictions %}<p><b>{{ c.field_label }}</b> ({{ c.period_label or "n/a" }}): {% for f in c.facts %}{{ f|fact_value }} from {{ f.original_filename or SOURCE_LABELS.get(f.source_type) }}{% if f.page_number %} p.{{ f.page_number }}{% endif %} [{{ f.status }}]{% if not loop.last %} vs {% endif %}{% endfor %} — unresolved; no value was selected automatically.</p>
+{% else %}<p>No unresolved contradictions.</p>{% endfor %}
+
+<h2>10. Sensitivity and scenario results</h2>
+{% if sensitivity %}
+<p class="small">{{ sensitivity.metric|upper }} under revenue and rate shocks. Assumptions: {{ sensitivity.assumptions|join(" ") }}</p>
+<table><tr><th>Revenue change</th>{% for b in sensitivity.rate_shocks_bps %}<th>+{{ b }} bps</th>{% endfor %}</tr>
+{% for row in sensitivity.revenue_rows %}<tr><td>{{ row.revenue_change_pct|pct }}</td>{% for c in row.cells %}<td>{{ c.dscr|ratio if c.dscr else "n/c" }}</td>{% endfor %}</tr>{% endfor %}
+</table>
+<table><tr><th>Operating expense change</th><th>{{ sensitivity.metric|upper }}</th></tr>
+{% for e in sensitivity.expense_rows %}<tr><td>+{{ e.opex_change_pct|pct }}</td><td>{{ e.dscr|ratio if e.dscr else "n/c" }}</td></tr>{% endfor %}</table>
+<p class="small">n/c = not calculable with the available verified inputs.</p>
+{% endif %}
+{% if scenarios %}<h3>Saved scenarios</h3>
+<table><tr><th>Scenario</th><th>Adjustments</th><th>Run</th><th>DSCR</th><th>LTV</th><th>Status</th></tr>
+{% for s in scenarios %}<tr><td>{{ s.name }}</td><td class="small">{% for k, v in s.adjustments.items() if v not in (None, "0", 0) %}{{ k }}={{ v }} {% endfor %}</td><td>#{{ s.run_number }}</td>
+<td>{{ (s.metrics.dscr.value|ratio) if s.metrics.dscr and s.metrics.dscr.value else "n/c" }}</td><td>{{ (s.metrics.ltv.value|pct) if s.metrics.ltv and s.metrics.ltv.value else "n/c" }}</td><td>{{ s.overall_status }}</td></tr>{% endfor %}
+</table>{% endif %}
+
+<h2>11. Key risks (from policy results) and questions requiring follow-up</h2>
+<h3>Policy exceptions and review items</h3>
+<ul>{% for r in risks %}<li>{{ r }}</li>{% else %}<li>No rule failures or review items were produced by the configured rules. This does not mean the credit has no risks.</li>{% endfor %}</ul>
+<h3>Questions requiring follow-up</h3>
+<ul>{% for q in questions %}<li>{{ q }}</li>{% else %}<li>None generated.</li>{% endfor %}</ul>
+
+{% if narrative %}
+<h2>12. MODEL-GENERATED narrative (not verified)</h2>
+<div class="narrative">
+<p class="small">Generated locally by {{ narrative.model }} from the structured results above only (no document text).
+It may contain errors and is not authoritative.{% if narrative.unsupported_numbers %} WARNING: numbers not found in the
+results: {{ narrative.unsupported_numbers|join(", ") }}.{% endif %}{% if narrative.decision_language %} WARNING: contains decision
+language ({{ narrative.decision_language|join(", ") }}) — disregard any implied decision.{% endif %}</p>
+{% if narrative.error %}<p>Narrative unavailable: {{ narrative.error }}</p>{% else %}{% for para in narrative.text.split("\n") if para.strip() %}<p>{{ para }}</p>{% endfor %}{% endif %}
+</div>
+{% endif %}
+
+<h2>{{ 13 if narrative else 12 }}. Assumptions and limitations</h2>
+<ul>{% for l in limitations %}<li>{{ l }}</li>{% endfor %}
+{% for f in run.findings if f.finding_type == "assumption" %}<li>{{ f.message }}</li>{% endfor %}</ul>
+
+<h2>{{ 14 if narrative else 13 }}. Human review checklist</h2>
+<table><tr><th style="width:40px">Done</th><th>Item</th></tr>
+{% for item in review_checklist %}<tr><td>☐</td><td>{{ item }}</td></tr>{% endfor %}
+</table>
+<p class="small">Report version {{ report_version }} · generated {{ generated_at }} by UW Helper running locally. No data left this computer.</p>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Operating statement · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p><a href="/cases/{{ case.id }}/property">← Property</a></p>
+<h1>Operating statement — map the lines</h1>
+<p class="small">Amounts from {{ statement.amount_basis }}. Suggested mappings are keyword guesses: check every line. Vacancy and expense lines are stored as positive amounts.</p>
+<form method="post" action="/cases/{{ case.id }}/property/t12">{{ csrf() }}
+{% for k, v in fields.items() if k not in ('stated_income', 'stated_expenses') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<input type="hidden" name="filename" value="{{ filename }}">
+<textarea name="csv_text" hidden aria-hidden="true">{{ csv_text }}</textarea>
+<table><tr><th>Line</th><th>Description</th><th class="num">Amount</th><th>Section</th><th>Maps to</th></tr>
+{% for ln in statement.lines %}<tr><td class="small">{{ ln.line }}</td><td>{{ ln.label }}{% if ln.errors %}<br><span class="badge rejected">{{ ln.errors|join('; ') }}</span>{% endif %}</td>
+<td class="num">{{ ln.amount|money(2) if ln.amount is not none else '—' }}</td><td class="small">{{ ln.section }}</td>
+<td><select name="map_{{ ln.line }}" aria-label="Mapping for {{ ln.label }}">{% for t in targets %}<option value="{{ t }}" {% if t == ln.suggested %}selected{% endif %}>{{ target_labels[t] }}</option>{% endfor %}</select></td></tr>{% endfor %}</table>
+<div class="panel"><h2 style="margin-top:0">Totals with the suggested mapping</h2>
+<table><tr><td>Effective gross income (rent − vacancy + other)</td><td class="num">{{ totals.effective_gross_income|money(2) }}</td><td>{% if rec.income_difference is not none %}{% if rec.income_ok %}<span class="badge verified">matches</span>{% else %}<span class="badge rejected">differs by {{ rec.income_difference|money(2) }}</span>{% endif %}{% endif %}</td></tr>
+<tr><td>Operating expenses</td><td class="num">{{ totals.property_operating_expenses|money(2) }}</td><td>{% if rec.expense_difference is not none %}{% if rec.expenses_ok %}<span class="badge verified">matches</span>{% else %}<span class="badge rejected">differs by {{ rec.expense_difference|money(2) }}</span>{% endif %}{% endif %}</td></tr></table>
+<p class="small muted">If you change mappings, the totals are recalculated and re-checked when you save.</p>
+<div class="row"><div><label>"Total income" printed</label><input type="text" name="stated_income" value="{{ fields.stated_income }}"></div>
+<div><label>"Total expenses" printed</label><input type="text" name="stated_expenses" value="{{ fields.stated_expenses }}"></div></div>
+<label class="check"><input type="checkbox" name="confirm_verified"> I compared the mapping with the statement; save the totals as VERIFIED (only allowed when both totals reconcile)</label>
+<div class="row"><div><label>Your name (for verified)</label><input type="text" name="confirmed_by"></div></div>
+<p><button>Save property totals</button></p></div></form>
+{% endblock %}

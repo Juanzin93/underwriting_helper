@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% if auto_refresh %}<meta http-equiv="refresh" content="6">{% endif %}
+<title>{% block title %}UW Helper{% endblock %} · UW Helper</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">UW Helper</a>
+  <a href="/deals">Deals</a>
+  <a href="/contacts">Contacts</a>
+  <a href="/organizations">Organizations</a>
+  <a href="/tasks">Tasks</a>
+  <a href="/lenders">Lenders</a>
+  <a href="/commissions">Commissions</a>
+  <a href="/">Underwriting files</a>
+  <a href="/cases/new">New file</a>
+  <a href="/portfolio">Portfolio</a>
+  <a href="/policies">Policies</a>
+  <a href="/audit">Audit</a>
+  <a href="/system">System &amp; privacy</a>
+  <span class="privacy" title="All processing happens on this computer">🔒 Local only · model {{ settings.ollama_model }} @ {{ settings.ollama_url }}</span>
+</header>
+<main>
+{% if flash %}<div class="flash {{ flash_level if flash_level in ('info','warn','error') else 'info' }}" role="status">{{ flash }}</div>{% endif %}
+{% if policy_errors %}<div class="danger-box"><b>Policy files with errors were not loaded:</b><ul>{% for e in policy_errors %}<li class="small mono">{{ e[:400] }}</li>{% endfor %}</ul></div>{% endif %}
+{% block content %}{% endblock %}
+<p class="footer">UW Helper {{ app_version }} — personal preliminary underwriting research tool. Not an automated credit decision-maker.
+Screening results are never approvals or denials. Data directory: <span class="mono">{{ settings.data_dir }}</span></p>
+</main>
+</body>
+</html>

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Servicing · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+{% if not account %}
+  {% if case.stage == 'FUNDED' and funding %}
+  <div class="panel"><h2 style="margin-top:0">Open servicing account</h2>
+  <p>Funded {{ funding.funded_amount|money(2) }} on {{ funding.funding_date }}; first payment {{ funding.first_payment_date }}. The schedule is generated
+  deterministically from the executed terms and the actual funded amount.</p>
+  <form method="post" action="/cases/{{ case.id }}/servicing/open" data-confirm="Open the servicing account and generate the schedule?">{{ csrf() }}
+  <div class="row"><div><label>Loan number (optional)</label><input type="text" name="loan_number" placeholder="default: LN-YYYY-NNNN"></div>
+  <div><label>Grace days</label><input type="number" name="grace_days" value="10" min="0" max="60"></div></div>
+  <label class="check"><input type="checkbox" name="add_default_monitoring" checked> Add default monitoring items (annual statements, tax return, insurance, collateral revaluation)</label>
+  <p><button>Open account</button></p></form></div>
+  {% else %}<div class="info-box">Servicing starts after funding is confirmed (current stage: {{ stage_labels.get(case.stage) }}).</div>{% endif %}
+{% else %}
+{% set st = state %}
+<div class="info-box">Scheduled amounts come from the payment schedule; actual amounts are only what you record. Nothing is assumed paid because a due date passed.
+No bank or payment-processor connection exists. As of <b>{{ as_of }}</b> <form method="get" class="inline actions"><input type="date" name="as_of" value="{{ as_of }}" aria-label="As-of date"><button class="small secondary">Recompute</button></form></div>
+<div class="kpi">
+<div><b>{{ account.loan_number }}</b><span>{{ account.status }} · grace {{ account.grace_days }} days</span></div>
+<div><b>{{ st.outstanding_principal|money(2) }}</b><span>outstanding principal (funded {{ st.funded_principal|money }})</span></div>
+<div><b>{{ st.past_due_amount|money(2) }}</b><span>past due ({{ st.past_due_count }} installment(s))</span></div>
+<div><b>{{ st.delinquency.replace('_',' ') }}</b><span>{{ st.days_past_due }} days past due</span></div>
+<div><b>{{ st.next_due.due_date if st.next_due else '—' }}</b><span>next due {{ st.next_due.remaining|money(2) if st.next_due else '' }}</span></div>
+<div><b>{{ st.maturity_date }}</b><span>maturity{% if st.balloon %} · balloon {{ st.balloon.payment|money }}{% endif %}</span></div>
+<div><b>{{ st.total_received|money(2) }}</b><span>received (interest {{ st.interest_paid|money(2) }}, fees {{ st.fees_paid|money(2) }}, extra principal {{ st.unscheduled_principal_paid|money(2) }})</span></div>
+</div>
+
+<h2>Alerts (rule-based)</h2>
+{% if alerts %}<ul>{% for a in alerts %}<li><span class="badge {{ 'conflict' if a.severity == 'high' else 'unverified' }}">{{ a.severity|upper }}</span> <b>{{ a.rule }}</b>: {{ a.message }}</li>{% endfor %}</ul>
+{% else %}<p>✔ No alerts.</p>{% endif %}
+<form method="post" action="/cases/{{ case.id }}/servicing/refresh" class="inline">{{ csrf() }}<button class="small secondary">Record current alerts as monitoring events</button></form>
+{% if events %}<details><summary>Monitoring events ({{ events|length }})</summary><table><tr><th>First seen</th><th>Rule</th><th>Message</th><th>Acknowledged</th></tr>
+{% for e in events %}<tr><td class="small">{{ e.first_seen_at }}</td><td>{{ e.rule }}</td><td class="small">{{ e.message }}</td><td class="small">{% if e.acknowledged_at %}{{ e.acknowledged_at }}: {{ e.acknowledged_note }}{% else %}
+<form method="post" action="/cases/{{ case.id }}/servicing/ack" class="actions">{{ csrf() }}<input type="hidden" name="event_id" value="{{ e.id }}"><input type="text" name="note" placeholder="follow-up note" required><button class="small">Acknowledge</button></form>{% endif %}</td></tr>{% endfor %}</table></details>{% endif %}
+
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Record a payment</h2>
+<form method="post" action="/cases/{{ case.id }}/servicing/payment" data-confirm="Record this payment as received?">{{ csrf() }}
+<div class="row"><div><label>Date received *</label><input type="date" name="received_date" required></div><div><label>Amount *</label><input type="text" name="amount" required></div></div>
+<div class="row"><div><label>Method</label><input type="text" name="method" placeholder="ACH / check"></div><div><label>Reference</label><input type="text" name="reference"></div></div>
+<label>Note</label><input type="text" name="note"><p><button class="small">Record payment</button></p></form>
+<h3>Import payments (CSV)</h3>
+<form method="post" action="/cases/{{ case.id }}/servicing/import?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data">
+<input type="file" name="file" accept=".csv" required><p class="small muted">Header: <span class="mono">date,amount[,reference,method,note]</span>. All rows are validated first; nothing is saved if any row is invalid. Exact duplicates are skipped.</p>
+<button class="small secondary">Import CSV</button></form></div>
+<div class="panel"><h2 style="margin-top:0">Fees</h2>
+<form method="post" action="/cases/{{ case.id }}/servicing/fee">{{ csrf() }}<div class="row">
+<div><label>Date</label><input type="date" name="fee_date" required></div><div><label>Type</label><select name="fee_type">{% for t in ['late_fee','modification_fee','inspection_fee','legal_fee','other'] %}<option>{{ t }}</option>{% endfor %}</select></div>
+<div><label>Amount</label><input type="text" name="amount" required></div></div><label>Note</label><input type="text" name="note"><p><button class="small secondary">Assess fee</button></p></form>
+{% if fees %}<table>{% for f in fees %}<tr><td>{{ f.fee_date }}</td><td>{{ f.fee_type }}</td><td class="num">{{ f.amount|money(2) }}</td></tr>{% endfor %}</table>{% endif %}
+<p class="small muted">Payments apply to installments (interest, then principal, oldest first), then fees, then extra principal.</p>
+{% if st.paid_off %}<form method="post" action="/cases/{{ case.id }}/servicing/paid-off" data-confirm="Mark the loan paid off?">{{ csrf() }}<input type="text" name="confirmed_by" placeholder="confirmed by" required><input type="text" name="note" placeholder="note"><button class="small">Mark paid off</button></form>{% endif %}
+</div></div>
+
+<h2>Payment history (actual)</h2>
+<table><tr><th>Received</th><th class="num">Amount</th><th>Type</th><th>Source</th><th>Reference</th><th>Note</th><th></th></tr>
+{% for p in payments %}<tr><td>{{ p.received_date }}</td><td class="num">{{ p.amount|money(2) }}</td><td>{{ p.entry_type }}{% if p.reversed %} <span class="badge conflict">REVERSED</span>{% endif %}</td><td>{{ p.source }}{% if p.import_batch %} ({{ p.import_batch }}){% endif %}</td><td>{{ p.reference or '' }}</td><td class="small">{{ p.note or '' }}</td>
+<td>{% if p.entry_type == 'PAYMENT' and not p.reversed %}<details><summary>Reverse</summary><form method="post" action="/cases/{{ case.id }}/servicing/reverse" data-confirm="Reverse this payment?">{{ csrf() }}<input type="hidden" name="payment_id" value="{{ p.id }}"><input type="text" name="reason" placeholder="reason (e.g. returned NSF)" required minlength="10"><button class="small danger">Reverse</button></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No payments recorded.</td></tr>{% endfor %}</table>
+
+<h2>Payment schedule (scheduled vs. applied)</h2>
+<details><summary>{{ st.installments|length }} installments across {{ schedules|length }} schedule version(s)</summary>
+<table><tr><th>#</th><th>Ver.</th><th>Due</th><th class="num">Scheduled</th><th class="num">Interest</th><th class="num">Principal</th><th class="num">Balance after (scheduled)</th><th class="num">Applied</th><th>Status</th></tr>
+{% for i in st.installments %}<tr><td>{{ i.seq }}</td><td>v{{ i.schedule_version }}</td><td>{{ i.due_date }}</td><td class="num">{{ i.payment|money(2) }}{% if i.is_balloon %} <span class="badge">BALLOON</span>{% endif %}</td><td class="num">{{ i.interest|money(2) }}</td><td class="num">{{ i.principal|money(2) }}</td><td class="num">{{ i.balance_after|money(2) }}</td>
+<td class="num">{{ i.paid_total|money(2) }}</td><td>{% if i.past_due %}<span class="badge conflict">PAST DUE</span>{% elif i.status == 'PAID' %}<span class="badge verified">PAID</span>{% else %}<span class="small">{{ i.status }}</span>{% endif %}</td></tr>{% endfor %}</table></details>
+
+<h2>Covenants</h2>
+<table><tr><th>Code</th><th>Requirement</th><th>Frequency</th><th>Latest test</th><th>Missing tests</th><th>Trend</th><th>Record test</th></tr>
+{% for c in covenants %}<tr><td class="mono small">{{ c.code }}{% if not c.active %}<br><span class="badge">INACTIVE</span>{% endif %}</td><td>{{ c.description }}<br><span class="small">{{ c.metric_label }} {{ c.operator }} {{ c.threshold }}</span></td><td class="small">{{ c.frequency }} from {{ c.first_test_date }}, report within {{ c.reporting_days }} days</td>
+<td class="small">{% if c.latest %}<span class="res {{ c.latest.result|result_class }}">{{ c.latest.result|result_label }}</span> {{ c.latest.test_period_end }}: {{ c.latest.observed_value or 'n/a' }}<br>{{ c.latest.explanation }}{% else %}none{% endif %}</td>
+<td class="small">{% for m in c.missing %}<span class="badge conflict">{{ m.period_end }}</span> {% else %}—{% endfor %}{% for m in c.due_soon %}<br>due soon: {{ m.period_end }} (by {{ m.deadline }}){% endfor %}</td>
+<td class="small">{{ c.deterioration or '' }}</td>
+<td class="small"><form method="post" action="/cases/{{ case.id }}/servicing/covenant-test">{{ csrf() }}<input type="hidden" name="covenant_id" value="{{ c.id }}">
+<input type="date" name="period_end" required aria-label="Test period end">
+{% if c.metric_key != 'manual' %}<select name="run_id"><option value="">manual value</option>{% for r in runs %}<option value="{{ r.id }}">run #{{ r.run_number }} ({{ r.base_period_label or 'n/a' }})</option>{% endfor %}</select>{% endif %}
+<input type="text" name="value" placeholder="manual value"><input type="text" name="evidence_note" placeholder="evidence (manual)"><button class="small">Record</button></form></td></tr>
+{% else %}<tr><td colspan="7" class="muted">No covenants configured.</td></tr>{% endfor %}</table>
+<details class="panel"><summary>Add covenant</summary><form method="post" action="/cases/{{ case.id }}/servicing/covenant">{{ csrf() }}
+<div class="row"><div><label>Code *</label><input type="text" name="code" required placeholder="MIN-DSCR"></div><div style="flex:2 1 260px"><label>Description *</label><input type="text" name="description" required></div>
+<div><label>Metric</label><select name="metric_key">{% for k, v in covenant_metrics.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+<div><label>Operator</label><select name="operator">{% for o in ['>=','>','<=','<'] %}<option>{{ o }}</option>{% endfor %}</select></div><div><label>Threshold *</label><input type="text" name="threshold" required></div></div>
+<div class="row"><div><label>Frequency</label><select name="frequency"><option>annual</option><option>semiannual</option><option>quarterly</option></select></div><div><label>First test period end *</label><input type="date" name="first_test_date" required></div><div><label>Reporting days</label><input type="number" name="reporting_days" value="120"></div></div>
+<p><button class="small">Add covenant</button></p></form></details>
+
+<h2>Monitoring items (statements, insurance, revaluations)</h2>
+<table><tr><th>Type</th><th>Description</th><th>Due</th><th>Recurs</th><th>Status</th><th></th></tr>
+{% for i in items %}<tr><td class="small">{{ i.item_type.replace('_',' ') }}</td><td>{{ i.description }}</td><td>{{ i.due_date }}{% if i.status == 'OPEN' and i.due_date < as_of %} <span class="badge conflict">OVERDUE</span>{% endif %}</td><td>{{ (i.frequency_months ~ ' mo') if i.frequency_months else 'no' }}</td><td>{{ i.status }}{% if i.completion_note %}<br><span class="small">{{ i.completion_note }}</span>{% endif %}</td>
+<td>{% if i.status == 'OPEN' %}<form method="post" action="/cases/{{ case.id }}/servicing/item-done" class="actions">{{ csrf() }}<input type="hidden" name="item_id" value="{{ i.id }}"><input type="text" name="note" placeholder="what was received" required><button class="small">Done</button></form>{% endif %}</td></tr>{% endfor %}</table>
+<details class="panel"><summary>Add monitoring item</summary><form method="post" action="/cases/{{ case.id }}/servicing/item">{{ csrf() }}<div class="row">
+<div><label>Type</label><select name="item_type">{% for t in ['financial_statements','insurance_renewal','collateral_revaluation','tax_returns','other'] %}<option>{{ t }}</option>{% endfor %}</select></div>
+<div style="flex:2 1 260px"><label>Description</label><input type="text" name="description" required></div><div><label>Due</label><input type="date" name="due_date" required></div><div><label>Recurs every (months)</label><input type="number" name="frequency_months" min="1"></div></div>
+<p><button class="small">Add</button></p></form></details>
+
+<h2>Modifications and restructurings</h2>
+{% for mm in modifications %}<div class="panel small"><b>{{ mm.modification_type }}</b> effective {{ mm.effective_date }} — approved by {{ mm.approved_by }}: {{ mm.reason }}<br>
+Before: {{ mm.before }}<br>After: {{ mm.after }}</div>{% else %}<p class="muted">None.</p>{% endfor %}
+<details class="panel"><summary>Record a modification (creates a new schedule version)</summary>
+<form method="post" action="/cases/{{ case.id }}/servicing/modify" data-confirm="Record this modification? The prior schedule is kept.">{{ csrf() }}
+<div class="row"><div><label>Type</label><select name="modification_type">{% for t in ['rate_change','term_extension','payment_deferral','re_amortization','restructure'] %}<option>{{ t }}</option>{% endfor %}</select></div>
+<div><label>Effective date *</label><input type="date" name="effective_date" required></div><div><label>New rate (%) (blank = unchanged)</label><input type="text" name="new_annual_rate"></div>
+<div><label>First payment under new terms *</label><input type="date" name="new_first_payment_date" required></div></div>
+<div class="row"><div><label>Remaining term (months) *</label><input type="number" name="remaining_term_months" required min="1"></div><div><label>Remaining amortization (months) *</label><input type="number" name="remaining_amortization_months" required min="1"></div>
+<div><label>Interest-only (months)</label><input type="number" name="interest_only_months" value="0" min="0"></div><div><label>Approved by *</label><input type="text" name="approved_by" required></div></div>
+<label>Reason *</label><input type="text" name="reason" required minlength="10">
+<p class="small muted">The account must be current through the effective date (arrears are not capitalized in this version).</p>
+<p><button class="small">Record modification</button></p></form></details>
+
+<h2 id="payoff">Payoff quotes</h2>
+<table><tr><th>Quoted</th><th>Good through</th><th>Day count</th><th class="num">Principal</th><th class="num">Interest (days × per diem)</th><th class="num">Fees</th><th class="num">Payoff</th><th></th></tr>
+{% for q in quotes %}<tr><td class="small">{{ q.quote_date }}<br><span class="muted">{{ q.created_by }}</span></td><td>{{ q.good_through }}</td><td class="small">{{ q.day_count }}</td>
+<td class="num">{{ q.principal|money(2) }}</td><td class="num">{{ q.accrued_interest|money(2) }}<br><span class="small muted">{{ q.days }} d × {{ q.per_diem|money(2) }} from {{ q.paid_through }}</span></td>
+<td class="num">{{ q.unpaid_fees|money(2) }}</td><td class="num"><b>{{ q.total|money(2) }}</b></td>
+<td class="small">{% if quote_checked_id == q.id and quote_check %}{% if quote_check.reproduced and quote_check.inputs_intact %}<span class="badge verified">re-checked</span>{% else %}<span class="badge rejected">differs</span>{% endif %}{% if quote_check.ledger_changed %}<br><span class="badge unverified">ledger changed: {{ quote_check.ledger_changed|join(', ') }}</span>{% endif %}{% else %}<a href="?quote={{ q.id }}#payoff">Re-check</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No quotes yet.</td></tr>{% endfor %}</table>
+{% if account.status == 'ACTIVE' %}<form method="post" action="/cases/{{ case.id }}/servicing/payoff/quote" class="actions">{{ csrf() }}
+<label>Good through <input type="date" name="good_through" required></label>
+<select name="day_count" aria-label="Day count"><option value="actual/365">actual/365</option><option value="actual/360">actual/360</option></select>
+<button class="small">Quote payoff</button></form>{% endif %}
+<p class="small muted">Payoff = outstanding principal + simple interest from the interest paid-through date (last installment whose interest is fully paid) to the good-through date at the current schedule rate + unpaid fees. A planning figure, not a lender payoff letter.</p>
+
+<h2>What-if (planning only)</h2>
+<form method="get" class="panel"><input type="hidden" name="wi" value="1"><div class="row">
+<div><label>Rate (%)</label><input type="text" name="wi_rate" placeholder="current"></div><div><label>Extra principal payment</label><input type="text" name="wi_extra" placeholder="0"></div>
+<div><label>CFADS ($/yr)</label><input type="text" name="wi_cfads" value="{{ latest_cfads or '' }}"></div><div><label>Other annual debt service</label><input type="text" name="wi_other_ds" placeholder="0"></div></div>
+<button class="small secondary">Model</button></form>
+{% if what_if %}<div class="panel small">Principal {{ what_if.principal|money(2) }} at {{ what_if.rate|rate }} over {{ what_if.remaining_payments }} remaining payments: payment {{ what_if.level_payment|money(2) }},
+highest annual debt service {{ what_if.max_annual_debt_service|money }}, lowest-year DSCR {{ what_if.dscr_minimum|ratio if what_if.dscr_minimum else 'n/a' }}, balloon {{ what_if.balloon_payment|money }}. {{ what_if.note }}</div>{% endif %}
+{% endif %}
+{% endblock %}
