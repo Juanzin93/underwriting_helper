@@ -103,6 +103,9 @@ async def deal_detail(request: Request, deal_id: str):
                  "tasks": task_svc.list_tasks(conn, view="all", deal_id=deal_id),
                  "activities": acts.list_activities(conn, deal_id=deal_id),
                  "timeline": acts.deal_timeline(conn, deal_id, 100)}
+        from uwhelper.reports import deal_memo
+
+        extra["memos"] = deal_memo.list_memos(conn, deal_id)
     return render(request, "crm/deal_detail.html", deal=deal, contacts=contacts, orgs=orgs, unlinked_files=unlinked,
                   **extra,
                   product_types=PRODUCT_TYPES, contact_types=CONTACT_TYPES,
@@ -144,6 +147,11 @@ async def deal_action(request: Request, deal_id: str, action: str):
         elif action in ("archive", "unarchive"):
             crm.update_deal(conn, deal_id, DealPatch(archived=action == "archive"))
             msg = "Deal archived (hidden from lists; nothing deleted)." if action == "archive" else "Deal restored."
+        elif action == "memo":
+            from uwhelper.reports import deal_memo
+
+            out = deal_memo.generate(conn, deal_id)
+            return redirect(f"/deals/{deal_id}#memos", f"Deal credit memo version {out['version']} generated.")
         elif action == "generate-requests":
             n = docreq.generate_requests(conn, deal_id)
             msg = f"{n} checklist item(s) added." if n else "All checklist items are already on the deal."
@@ -161,6 +169,31 @@ async def deal_action(request: Request, deal_id: str, action: str):
         else:
             raise ValidationFailure("Unknown action.")
     return redirect(f"/deals/{deal_id}", msg)
+
+
+@router.get("/deals/{deal_id}/memos/{memo_id}/{fmt}")
+async def deal_memo_file(request: Request, deal_id: str, memo_id: str, fmt: str):
+    from fastapi.responses import HTMLResponse, Response
+
+    from uwhelper.reports import deal_memo
+    from uwhelper.reports.builder import render_pdf
+    from uwhelper.web.routes.reports import REPORT_CSP
+
+    with get_db(request).session() as conn:
+        memo = deal_memo.get_memo(conn, deal_id, memo_id)
+        if fmt == "verify":
+            r = deal_memo.verify(conn, deal_id, memo_id)
+            ok = r["context_intact"] and r["html_reproduced"] and r["stored_html_intact"]
+            return redirect(f"/deals/{deal_id}#memos", f"Memo v{memo['version']}: " + (
+                "stored context intact and re-rendering matches exactly." if ok else
+                f"context {'intact' if r['context_intact'] else 'ALTERED'}; re-rendering "
+                f"{'matches' if r['html_reproduced'] else 'differs (template changed since)'}."), "info" if ok else "warn")
+    if fmt == "html":
+        return HTMLResponse(memo["html"], headers={"Content-Security-Policy": REPORT_CSP})
+    if fmt == "pdf":
+        return Response(render_pdf(memo["html"]), media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="deal_memo_v{memo["version"]}.pdf"'})
+    raise ValidationFailure("Unknown format.")
 
 
 @router.post("/deals/{deal_id}/requests/{request_id}/{action}")

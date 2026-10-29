@@ -134,6 +134,8 @@ def fmt_value(d: Decimal | None, unit: str) -> str:
         return fmt_ratio(d)
     if unit == "percent":
         return fmt_pct(d)
+    if unit == "years":
+        return "—" if d is None else f"{d:.1f} years"
     if d is None:
         return "—"
     return f"{d:,}"

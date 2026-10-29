@@ -25,6 +25,22 @@ async def policies(request: Request):
     return render(request, "policies.html", policies=items, usage=usage)
 
 
+@router.get("/policies/diff")
+async def policy_diff(request: Request):
+    from uwhelper.policy.diff import diff_policies
+
+    a, b = request.query_params.get("a", ""), request.query_params.get("b", "")
+    with get_db(request).session() as conn:
+        items = list_policies(conn)
+        rows = {r["id"]: r for r in conn.execute("SELECT * FROM policies WHERE id IN (?,?)", (a, b))}
+    diff = None
+    if a in rows and b in rows:
+        diff = diff_policies(policy_from_row(rows[a]), policy_from_row(rows[b]))
+    elif a or b:
+        raise NotFound("Policy version not found")
+    return render(request, "policy_diff.html", policies=items, diff=diff, a=a, b=b)
+
+
 @router.get("/policies/{policy_id}")
 async def policy_detail(request: Request, policy_id: str):
     with get_db(request).session() as conn:

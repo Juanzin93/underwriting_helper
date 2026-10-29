@@ -97,6 +97,22 @@ class PolicyParameters(BaseModel):
     sensitivity_rate_shocks_bps: list[int] = Field(default_factory=lambda: [0, 100, 200, 300])
     sensitivity_expense_shocks: list[Decimal] = Field(default_factory=lambda: [Decimal(x) for x in ("0", "0.05", "0.10")])
 
+    # Optional CRE parameters (since demo_cre v1.2.0) are validated here but deliberately NOT declared as fields:
+    # a declared field would appear in every policy's normalised content and change the content hash of
+    # policy versions that were registered before it existed.
+    @model_validator(mode="after")
+    def _cre_params(self) -> "PolicyParameters":
+        extra = self.model_extra or {}
+        if "cre_cap_rate" in extra:
+            v = Decimal(str(extra["cre_cap_rate"]))
+            if not Decimal(0) < v < Decimal(1):
+                raise ValueError("cre_cap_rate must be between 0 and 1 (e.g. 0.075)")
+        if "cre_stress_rate_bps" in extra:
+            b = extra["cre_stress_rate_bps"]
+            if not isinstance(b, int) or isinstance(b, bool) or not 0 <= b <= 2000:
+                raise ValueError("cre_stress_rate_bps must be a whole number of basis points between 0 and 2000")
+        return self
+
     @field_validator("collateral_advance_rates")
     @classmethod
     def _rates(cls, v: dict[str, Decimal]) -> dict[str, Decimal]:

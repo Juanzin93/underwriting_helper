@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>{{ m.deal.deal_number }} credit memo v{{ m.version }}</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1b2430;font-size:14px;line-height:1.45}
+h1{font-size:22px;margin-bottom:2px}h2{font-size:16px;border-bottom:2px solid #1f3b63;padding-bottom:3px;margin-top:22px}
+table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border-bottom:1px solid #d7dde5;padding:4px 6px;text-align:left;vertical-align:top}
+th{background:#eef1f5;font-size:12.5px}.num{text-align:right;font-variant-numeric:tabular-nums}.muted{color:#5b6573}.small{font-size:12px}
+.banner{border:2px solid #b45309;background:#fff7e6;padding:8px 12px;margin:10px 0}.tag{display:inline-block;border:1px solid #888;border-radius:9px;padding:0 6px;font-size:11px}
+</style></head><body>
+<div class="banner"><b>PRELIMINARY — NOT A CREDIT APPROVAL.</b> Prepared from records in UW Helper. Figures come from the deal record, its document checklist and the linked underwriting file's saved run. Only a named person's recorded decision can approve or decline.</div>
+<h1>{{ m.deal.deal_number }} · {{ m.deal.name }}</h1>
+<p class="muted small">Deal credit memo version {{ m.version }} · generated {{ m.generated_at[:16].replace('T',' ') }} UTC by {{ m.generated_by }} · UW Helper {{ m.app_version }} · {{ m.template_version }}</p>
+
+<h2>Request</h2>
+<table><tr><th style="width:28%">Deal type / product</th><td>{{ 'Commercial real estate' if m.deal.deal_type == 'cre' else 'Small business' }} · {{ m.deal.product_type.replace('_',' ') }}</td></tr>
+<tr><th>Requested amount</th><td>{{ m.deal.requested_amount|money if m.deal.requested_amount else '—' }}</td></tr>
+<tr><th>Purpose</th><td>{{ m.deal.loan_purpose or '—' }}</td></tr>
+<tr><th>Collateral</th><td>{{ m.deal.collateral_summary or '—' }}</td></tr>
+<tr><th>Target close</th><td>{{ m.deal.target_close_date or '—' }}</td></tr>
+<tr><th>Pipeline status</th><td>{{ m.deal.status.replace('_',' ') }} since {{ m.deal.status_changed_at[:10] }}</td></tr></table>
+{% for n in m.alignment_notes %}<p class="small"><b>Note:</b> {{ n }}</p>{% endfor %}
+
+<h2>Borrower and people</h2>
+{% if m.borrower %}<p><b>{{ m.borrower.name }}</b>{% if m.borrower.industry %} · {{ m.borrower.industry }}{% endif %}{% if m.borrower.city %} · {{ m.borrower.city }} {{ m.borrower.state or '' }}{% endif %}</p>{% else %}<p class="muted">No borrower organization recorded.</p>{% endif %}
+<table><tr><th>Name</th><th>Role</th></tr>{% for p in m.people %}<tr><td>{{ p.name }}</td><td>{{ p.role.replace('_',' ') }}</td></tr>{% else %}<tr><td colspan="2" class="muted">None recorded.</td></tr>{% endfor %}</table>
+
+<h2>Document checklist</h2>
+{% set s = m.checklist.summary %}
+<p>{{ s.required_outstanding }} required item(s) outstanding · {{ s.accepted }} accepted · {{ s.waived }} waived · {{ s.total }} total{% if m.checklist.versions %} · checklist {{ m.checklist.versions|join(', ') }}{% endif %} · {{ m.open_tasks }} open task(s)</p>
+<table><tr><th>Item</th><th>Status</th><th>Reviewed by</th><th>File</th></tr>
+{% for i in m.checklist.rows %}<tr><td>{{ i.label }}{% if i.required %} <span class="tag">required</span>{% endif %}</td><td>{{ i.status }}</td><td>{{ i.reviewed_by or '' }}</td><td class="small">{{ i.file or '' }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No document requests.</td></tr>{% endfor %}</table>
+
+<h2>Underwriting</h2>
+{% set uw = m.underwriting %}
+{% if not uw %}<p class="muted">No underwriting file is linked to this deal.</p>
+{% elif not uw.run %}<p>Underwriting file {{ uw.case_number }} (stage {{ uw.stage }}) has no verified-only screening run yet.</p>
+{% else %}{% set r = uw.run %}
+<p>Underwriting file <b>{{ uw.case_number }}</b> (stage {{ uw.stage }}) · screening run <b>#{{ r.run_number }}</b> of {{ r.created_at[:10] }} · policy {{ r.policy }}{% if r.policy_illustrative %} <span class="tag">ILLUSTRATIVE</span>{% endif %} · base period {{ r.base_period or '—' }}
+{% if not r.current %}<br><b>This run is out of date</b> — information changed after it was saved.{% endif %}
+<br><span class="small muted">Input snapshot SHA-256 {{ r.inputs_sha256[:16] }}…{% if r.case_memo_version %} · underwriting-file credit memo v{{ r.case_memo_version }} is based on this run{% endif %}</span></p>
+<p><b>Screening result:</b> {{ r.overall_status_text }} ({% for k, v in r.result_counts|dictsort %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %})</p>
+<table><tr><th>Metric</th><th class="num">Value</th></tr>
+{% for x in r.metrics %}<tr><td>{{ x.label }}</td><td class="num">{% if x.status == 'computed' %}{{ x.value|fmtval(x.unit) }}{% else %}<span class="muted">not calculated</span>{% endif %}</td></tr>{% endfor %}</table>
+{% if r.exceptions %}<h3>Items needing review</h3><table><tr><th>Rule</th><th>Result</th><th>Observed</th><th>Explanation</th></tr>
+{% for e in r.exceptions %}<tr><td>{{ e.description }}</td><td>{{ e.result }}</td><td class="small">{{ e.observed_value or '—' }}{% if e.threshold %} {{ e.operator }} {{ e.threshold }}{% endif %}</td><td class="small">{{ e.explanation }}</td></tr>{% endfor %}</table>{% endif %}
+{% if r.decision %}<p><b>Recorded credit decision:</b> {{ r.decision.decision.replace('_',' ') }} by {{ r.decision.decided_by }} on {{ r.decision.decided_at[:10] }}.</p>{% else %}<p>No credit decision has been recorded on the underwriting file.</p>{% endif %}
+{% endif %}
+
+<h2>Recent pipeline history</h2>
+<table><tr><th>When</th><th>Change</th><th>Reason</th><th>Authorized by</th></tr>
+{% for h in m.status_history|reverse %}<tr><td class="small">{{ h.occurred_at[:10] }}</td><td>{{ h.from_status or '—' }} → {{ h.to_status }}</td><td class="small">{{ h.reason }}</td><td>{{ h.authorized_by or '' }}</td></tr>{% endfor %}</table>
+<p class="small muted">Thresholds in illustrative policies are demo values, not lending standards. This memo does not give legal, tax or credit advice.</p>
+</body></html>

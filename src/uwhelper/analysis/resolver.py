@@ -31,6 +31,7 @@ from uwhelper.metrics.types import (
     GuarantorInput,
     InputValue,
     LoanTermsInput,
+    RentRollInput,
 )
 from uwhelper.modules import get_module
 from uwhelper.repo import cases as cases_repo
@@ -337,7 +338,53 @@ def build_inputs(conn: sqlite3.Connection, case_id: str, mode: str = "verified_o
 
         inputs.guarantors.append(GuarantorInput(p["id"], p["name"], _g("guarantor_personal_income"),
                                                 _g("guarantor_living_expenses"), _g("guarantor_personal_debt_service")))
+    if case["loan_type"] == "commercial_real_estate":
+        inputs.rent_roll = _rent_roll_input(conn, case_id, mode, as_of or date.today(), findings)
     return inputs, findings
+
+
+RENT_ROLL_STALE_DAYS = 180
+RENT_ROLL_LABELS = {
+    "units_total": "Rent roll: total units", "units_occupied": "Rent roll: occupied units",
+    "in_place_rent": "Rent roll: in-place annual rent", "vacant_market_rent": "Rent roll: market rent of vacant units",
+    "rent_expiring_12m": "Rent roll: annual rent expiring within 12 months",
+    "rent_expiring_24m": "Rent roll: annual rent expiring within 24 months",
+    "walt_weighted": "Rent roll: Σ rent × remaining years", "walt_rent": "Rent roll: rent with known lease end",
+}
+
+
+def _rent_roll_input(conn: sqlite3.Connection, case_id: str, mode: str, as_of: date,
+                     findings: list[dict[str, Any]]) -> RentRollInput | None:
+    from uwhelper.cre.rent_roll import roll_for_run, summarize
+
+    roll = roll_for_run(conn, case_id, mode)
+    if roll is None:
+        return None
+    summ = summarize(roll)
+    age = (as_of - date.fromisoformat(roll["as_of_date"])).days
+    flags = {"stale"} if age > RENT_ROLL_STALE_DAYS else set()
+    if flags:
+        findings.append({"finding_type": "stale", "severity": "medium", "field_key": "rent_roll",
+                         "period_label": roll["as_of_date"],
+                         "message": f"The rent roll is {age} days old (as of {roll['as_of_date']})."})
+    if summ["unknown_lease_ends"]:
+        findings.append({"finding_type": "data_quality", "severity": "low", "field_key": "rent_roll",
+                         "period_label": roll["as_of_date"],
+                         "message": f"{summ['unknown_lease_ends']} occupied unit(s) have no lease end date; rollover and "
+                                    "WALT are not calculated."})
+    src = [{"fact_id": None, "document_id": roll["document_id"], "filename": roll.get("original_filename"),
+            "page_number": None, "source_type": "rent_roll", "status": roll["status"], "rent_roll_id": roll["id"]}]
+    values = {}
+    for key, label in RENT_ROLL_LABELS.items():
+        val = summ[key]
+        if val is None:
+            values[key] = InputValue.missing(key, label, "Not determinable from the rent roll (missing market rents or "
+                                                         "lease end dates).")
+        else:
+            values[key] = InputValue(name=key, label=label, value=val, state="ok",
+                                     verified=roll["status"] == "verified", flags=set(flags), sources=list(src),
+                                     note=f"Rent roll as of {roll['as_of_date']} ({roll['status']}).")
+    return RentRollInput(roll["id"], roll["as_of_date"], roll["status"], values)
 
 
 def annualize_factor(freq: str) -> int:

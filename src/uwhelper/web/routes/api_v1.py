@@ -383,6 +383,47 @@ def import_csv(request: Request, kind: Literal["contacts", "organizations"], fil
                                                          source_name=file.filename)}, 201)
 
 
+@router.post("/deals/{deal_id}/memos")
+def deal_memo_create(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.reports import deal_memo
+
+    with get_db(request).session() as conn:
+        return _json(deal_memo.generate(conn, deal_id), 201)
+
+
+@router.get("/deals/{deal_id}/memos")
+def deal_memo_list(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.reports import deal_memo
+
+    with get_db(request).session() as conn:
+        crm.get_deal(conn, deal_id)
+        return _json({"items": deal_memo.list_memos(conn, deal_id)})
+
+
+@router.get("/deals/{deal_id}/memos/{memo_id}/verify")
+def deal_memo_verify(request: Request, deal_id: str, memo_id: str) -> JSONResponse:
+    from uwhelper.reports import deal_memo
+
+    with get_db(request).session() as conn:
+        return _json(deal_memo.verify(conn, deal_id, memo_id))
+
+
+@router.get("/underwriting-files/{case_id}/runs/{run_id}/verify")
+def run_verify(request: Request, case_id: str, run_id: str) -> JSONResponse:
+    from uwhelper.analysis.reproduce import verify_run
+
+    with get_db(request).session() as conn:
+        return _json(verify_run(conn, case_id, run_id))
+
+
+@router.get("/underwriting-files/{case_id}/runs/{run_id}/traceability")
+def run_trace(request: Request, case_id: str, run_id: str) -> JSONResponse:
+    from uwhelper.analysis.evidence import run_traceability
+
+    with get_db(request).session() as conn:
+        return _json(run_traceability(conn, case_id, run_id))
+
+
 @router.get("/pipeline")
 def pipeline(request: Request) -> JSONResponse:
     with get_db(request).session() as conn:

@@ -127,7 +127,7 @@ migrations the next time the app starts.
 git pull
 .\.venv\Scripts\python -m pip install -r requirements.lock
 .\.venv\Scripts\python -m pip install -e . --no-deps
-.\.venv\Scripts\python -m uwhelper init        # applies new migrations (0007 CRM, 0008 workflows); existing data kept
+.\.venv\Scripts\python -m uwhelper init        # applies new migrations (0007 CRM, 0008 workflows, 0009 evidence/CRE); existing data kept
 ```
 
 Migrations are forward-only and checksum-verified; the app refuses to start if an applied migration file was edited.

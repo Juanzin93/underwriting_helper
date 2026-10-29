@@ -24,25 +24,34 @@ endpoint, JSON error format, `/api/v1`, navigation, lock file, Windows guide. Se
 Also fixed: CRM templates were missing from package data (non-editable installs); flash messages were lost on
 redirects with a `#fragment`; wide tables caused horizontal scrolling on phones.
 
-## Milestone 3 — evidence-backed extraction and business/CRE underwriting (next)
+## Milestone 3 — evidence-backed extraction and business/CRE underwriting ✅
+
+| # | Delivered | Verified by (`tests/unit/test_m3_evidence_cre.py` unless noted) |
+|---|---|---|
+| 3.1 | Extraction runs record model + digest, Ollama version, prompt fingerprint (SHA-256 of prompt version, system prompt and output schema), document SHA-256, pages sent and generation options; shown on the Documents page and in evidence trails, with "document changed since" / "prompt changed since" checks | `test_extraction_run_records_full_provenance_*`, `test_prompt_fingerprint_*` |
+| 3.2 | Evidence trail per metric (inputs classified as fact / record / assumption / derived; facts with page, excerpt, extraction provenance and review history) and a traceability check per run | `test_every_metric_of_sample_run_is_traced`, `test_untraced_input_is_reported` |
+| 3.3 | CRE: rent roll storage, stressed property DSCR, break-even occupancy, income-approach value and LTV on it, physical and economic occupancy, 12/24-month rollover, WALT; illustrative policy `demo_cre` v1.2.0 (effective 2026-11-01) with cap rate and stress parameters and four new rules | `test_cre_metrics_hand_worked` (every value checked against hand-worked Decimal arithmetic), `test_verified_only_ignores_draft_roll_*`, `test_non_cre_runs_unchanged_*` |
+| 3.4 | Rent-roll CSV import (preview → draft → reconcile to printed totals within $1 → named verification; verified rolls immutable, newer ones supersede) and T-12 import (keyword mapping the user can change, section detection, monthly columns summed, reconciliation of EGI and expenses; totals saved as verified facts only when reconciled and confirmed by a named person; lines kept immutably) | `test_rent_roll_*`, `test_t12_*` |
+| 3.5 | Runs store the rule-evaluation context; any run can be re-checked from its stored inputs and exact policy version (metrics always, rules for runs saved since M3); policy version diff page | `test_saved_run_reproduces_exactly`, `test_reproduction_detects_*`, `test_policy_versions_*`; 5/5 runs of a Milestone 2 database reproduced after upgrade |
+| 3.6 | Versioned, immutable credit memo per deal (deal, borrower, people, checklist with version, linked run with policy version and input hash, exceptions, decision); verify re-renders byte-for-byte; HTML/PDF | `test_deal_memo_*` |
+
+Design decision: CRE is **not** a separately registered lending module. The single `commercial` module is wired
+through extraction, the resolver, policies and cases; splitting it would touch all of them for no user benefit. CRE
+has its own package (`uwhelper/cre/`: rent rolls, T-12) and calculations (`metrics/cre.py`) and stays a loan type of
+the commercial module, sharing fields and extraction.
+
+## Milestone 4 — lender and product catalog, explainable matching (next)
 
 | # | Item | Depends on | Acceptance criteria |
 |---|---|---|---|
-| 3.1 | **Pinned extraction runs.** Record model name + digest (from local Ollama `/api/show`), prompt template hash, document SHA-256 and page range on every extraction run; show them on facts | M2 | Re-running extraction on the same inputs shows identical provenance; facts link to run + page; no network beyond loopback |
-| 3.2 | **Evidence view per metric.** From any metric, list the verified facts, their pages and the formula (existing data, new page) | 3.1 | Every computed metric in a run links to ≥ 1 verified fact or is marked user-entered |
-| 3.3 | **CRE module.** Today NOI, property DSCR and debt yield are computed from property totals inside the commercial module. Split out a CRE module with unit/lease-level rent roll, T-12 lines, taxes, insurance, reserves, and add cap-rate value, DSCR at a stressed rate, breakeven occupancy and lease-rollover exposure; illustrative CRE policy v2 | — | Metrics computed in Decimal with tests against hand-worked examples; missing inputs → UNKNOWN, never zero |
-| 3.4 | **Rent-roll and T-12 import** from CSV/XLSX-exported CSV with column mapping preview (same pattern as the CRM import) | 3.3 | Totals reconcile to the source; mismatches block "verified" |
-| 3.5 | **Versioned rule sets with effective dates** across both modules; run records rule-set version; diff view between versions | 3.3 | Old runs reproduce exactly with their original rule versions |
-| 3.6 | **Credit memo per deal** combining the file's run, deal summary, sponsors/guarantors (contacts) and document checklist status | 2.x, 3.2 | Memo cites run number and checklist version; regenerating an old memo gives the same text |
-
-Exit criteria: a CRE deal can go from rent roll + T-12 to a reproducible run and memo with every number traced to a page or
-a named person's entry.
+| 4.1 | **Lenders and programs.** `lender_programs` (lender organization, product types, deal types, states, min/max amount, notes), `program_criteria_versions` (immutable criteria sets with `source`, `verified_at`, `verified_by`, effective date) | M2 orgs | A new criteria version never alters an older one; editing creates a version; audit on each |
+| 4.2 | **Criteria language.** Reuse the policy condition subjects (`metric:`, `terms:`, `case:`, `deal:`) with operators; validation against the metric catalog | 4.1, M3 | Unknown metric or field refused with a clear message; YAML/CSV import with preview |
+| 4.3 | **Explainable matching.** For a deal's latest current run: per program, each criterion PASS / FAIL / UNKNOWN with observed value and reason; ranking only by count of PASS/UNKNOWN, never a hidden score | 4.2 | Every match row cites the criteria version and run number; UNKNOWN never treated as PASS |
+| 4.4 | **Freshness.** Criteria older than a configurable age (default 180 days) are flagged on match results and the lender page | 4.1 | Stale flag tested across the boundary date |
+| 4.5 | **Lender CRM view.** Lender organization page shows programs, contacts, past submissions (placeholder until M5) | 4.1 | Page renders with and without programs |
 
 ## Backlog (planned, not started)
 
-* **M4 — Lender and product catalog.** `lenders`, `lender_programs`, `program_criteria` with **versions** and
-  `verified_at`/source fields; manual entry and local file import; explainable matching (each criterion PASS/FAIL/
-  UNKNOWN with reason); stale-criteria warnings. *Accept:* matches cite the criteria version; stale data flagged.
 * **M5 — Structuring and brokerage.** Structures per deal (reuse structuring engine), lender submissions (package
   manifest of exactly which files are shared, recorded before export), offers/term sheets compared side by side,
   referral partners, commission and fee schedules with splits (Decimal). *Accept:* submission records what was shared;

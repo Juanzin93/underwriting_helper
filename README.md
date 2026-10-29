@@ -23,6 +23,10 @@ structuring, due diligence, closing, funding and servicing — entirely on your 
 * tracks **organizations, contacts and deals** (brokerage pipeline with human-authorized approval/decline/funding),
   kept consistent with each deal's underwriting file, plus **tasks**, a per-deal **document checklist**,
   append-only **notes/activity timeline** and **CSV import** of contacts/organizations;
+* for **commercial real estate**: rent-roll and T-12 imports that must reconcile to the printed totals before they
+  count as verified, plus stressed DSCR, break-even occupancy, occupancy, lease rollover and WALT;
+* shows an **evidence trail** for every metric (fact → page → extraction run / person) and can **re-check any saved
+  run** against its stored inputs and exact policy version; generates a versioned **credit memo per deal**;
 * offers a local JSON API (`/api/v1`, schema at `/api/v1/openapi.json`) and a `/health` endpoint.
 
 Step-by-step Windows install, configuration, backup and restore: **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**.
@@ -98,7 +102,7 @@ record or import payments, covenants, alerts) → **Portfolio** (top menu).
 ## 3. Tests
 
 ```powershell
-scripts\run_tests.ps1                # 287 tests (2 need Ollama); no Ollama or internet needed
+scripts\run_tests.ps1                # 308 tests (2 need Ollama); no Ollama or internet needed
 scripts\run_tests.ps1 -Ollama        # also runs live tests against your local model
 # or: .\.venv\Scripts\python -m pytest -q
 ```
@@ -153,6 +157,7 @@ src/uwhelper/
   config.py            settings (.env/toml/env) + loopback/cloud-model/integration validation
   core/                error envelope, request IDs
   crm/                 organizations, contacts, deals, pipeline sync, tasks, document checklists, activities, CSV import
+  cre/                 rent rolls and property operating statements (T-12) for CRE files
   integrations/        disabled-by-default registry for future opt-in adapters (none implemented)
   db/                  SQLite connection, transactions, checksum-verified migrations (migrations/*.sql)
   domain/              Decimal money parsing/rounding, enums, Pydantic input models
@@ -180,7 +185,7 @@ periods, verified-only) → metrics (Python) → policy engine → immutable run
 closing → human-confirmed funding → servicing.**
 
 Upgrading an existing installation: pull the new code, run `pip install -e . --no-deps`, back up, then start the app —
-migrations 0002–0008 run automatically, existing cases start in INTAKE, keep working without a deal, and their borrowers are linked to organizations (nothing is deleted).
+migrations 0002–0009 run automatically, existing cases start in INTAKE, keep working without a deal, and their borrowers are linked to organizations (nothing is deleted).
 
 More detail: [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md), [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE_ASSESSMENT.md](docs/ARCHITECTURE_ASSESSMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with ER diagram), [docs/METRICS.md](docs/METRICS.md),
 [docs/POLICIES.md](docs/POLICIES.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/OPERATIONS.md](docs/OPERATIONS.md),

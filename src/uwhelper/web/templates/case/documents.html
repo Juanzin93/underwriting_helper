@@ -51,7 +51,7 @@ Results are saved as <span class="badge candidate">⚠ UNVERIFIED</span> <span c
 <h2>Extraction runs</h2>
 <table><tr><th>Started</th><th>Document</th><th>Model</th><th>Prompt</th><th>Status</th><th>Facts</th><th>Chunks failed</th><th>Notes</th></tr>
 {% for r in extraction_runs %}<tr><td class="small">{{ r.started_at[:19].replace('T',' ') }}</td><td>{{ r.original_filename }}</td><td class="small">{{ r.model_name }}{% if r.model_digest %}<br><span class="mono">{{ r.model_digest[:12] }}</span>{% endif %}</td>
-<td class="small">{{ r.prompt_version }}</td><td><span class="badge {{ 'verified' if r.status == 'completed' else 'unverified' if r.status in ('running','partial') else 'conflict' }}">{{ r.status|upper }}</span></td>
+<td class="small">{{ r.prompt_version }}{% if r.prompt_sha256 %}<br><span class="mono" title="SHA-256 of the prompt and output schema">{{ r.prompt_sha256[:10] }}</span>{% endif %}{% if r.ollama_version %}<br>Ollama {{ r.ollama_version }}{% endif %}{% if r.document_sha256 %}<br><span class="muted">doc</span> <span class="mono">{{ r.document_sha256[:10] }}</span>{% endif %}</td><td><span class="badge {{ 'verified' if r.status == 'completed' else 'unverified' if r.status in ('running','partial') else 'conflict' }}">{{ r.status|upper }}</span></td>
 <td>{{ r.facts_created }}</td><td>{{ r.chunks_failed }}/{{ r.chunks_total }}</td><td class="small">{{ r.error_message or '' }}</td></tr>{% endfor %}
 </table>
 {% endif %}

@@ -5,6 +5,7 @@
 {% include "case/_header.html" %}
 {% include "case/_run_banner.html" %}
 {% if run %}
+<p class="small"><a href="/cases/{{ case.id }}/runs/{{ run.id }}/evidence">Traceability check for this run →</a></p>
 <p class="small muted">All values are calculated deterministically in Python from the inputs shown. A metric is not calculated when an input is missing, contradictory or (in verified-only runs) unverified.</p>
 {% for title, ms in groups %}
 <h2>{{ title }}</h2>
@@ -20,7 +21,7 @@
 {% for fl in i.flags if fl in ('annualized','stale','estimate','scenario_adjusted','period_mismatch','derived') %}<span class="badge">{{ fl|flag_label if fl != 'derived' else 'CALCULATED' }}</span>{% endfor %}
 {% for s in i.sources if s.document_id %}<a href="/cases/{{ case.id }}/documents/{{ s.document_id }}?page={{ s.page_number or 1 }}">{{ s.filename or 'source' }}{% if s.page_number %} p.{{ s.page_number }}{% endif %}</a> {% endfor %}
 {% if i.note %}<br><span class="muted">{{ i.note }}</span>{% endif %}</td></tr>{% endfor %}</table>
-<span class="small">{{ m.explanation }}</span></details>
+<span class="small">{{ m.explanation }}</span> <a class="small" href="/cases/{{ case.id }}/runs/{{ run.id }}/metrics/{{ m.metric_key }}">Evidence trail →</a></details>
 {% else %}<br><span class="small muted">{{ m.explanation }}</span>{% endif %}
 </td></tr>
 {% endfor %}

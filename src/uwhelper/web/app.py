@@ -158,8 +158,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         servicing,
         system,
     )
+    from uwhelper.web.routes import cre as cre_routes
 
-    for module in (health, api_v1, cases, documents, facts, analysis, reports, system, lifecycle, servicing, crm):
+    for module in (health, api_v1, cases, documents, facts, analysis, reports, system, lifecycle, servicing, crm,
+                   cre_routes):
         app.include_router(module.router)
 
     from uwhelper.integrations import IntegrationDisabled

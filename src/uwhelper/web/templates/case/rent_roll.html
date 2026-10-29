@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Rent roll · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p><a href="/cases/{{ case.id }}/property">← Property</a></p>
+{% macro unit_table(units, preview=False) %}<table><tr>{% if preview %}<th>Line</th>{% endif %}<th>Unit</th><th>Tenant</th><th class="num">Sq ft</th><th>Occupied</th><th class="num">Annual rent</th><th class="num">Market (annual)</th><th>Lease</th>{% if preview %}<th>Problems</th>{% endif %}</tr>
+{% for u in units %}<tr>{% if preview %}<td class="small">{{ u.line }}</td>{% endif %}<td>{{ u.unit }}</td><td>{{ u.tenant or '—' }}</td><td class="num">{{ u.square_feet or '' }}</td><td>{{ 'yes' if u.occupied else 'vacant' }}</td>
+<td class="num">{{ u.annual_rent|money }}</td><td class="num">{{ u.market_annual_rent|money if u.market_annual_rent is not none else '—' }}</td>
+<td class="small">{{ u.lease_start or '' }} → {{ 'MTM' if u.month_to_month else (u.lease_end or '?') }}</td>{% if preview %}<td class="small">{{ u.errors|join('; ') }}</td>{% endif %}</tr>{% endfor %}</table>{% endmacro %}
+{% if preview %}
+<h1>Rent roll preview</h1>
+<div class="kpi"><div><b>{{ preview.valid|length }}</b><span>valid units</span></div><div><b>{{ preview.invalid|length }}</b><span>invalid rows</span></div>
+<div><b>{{ preview.annual_rent|money }}</b><span>in-place annual rent ({{ preview.rent_basis }})</span></div>
+<div><b>{{ stated|money if stated is not none else '—' }}</b><span>total printed on the rent roll</span></div></div>
+{% if stated is not none %}{% set diff = preview.annual_rent - stated %}{% if diff|abs <= tolerance %}<div class="info-box">Unit total matches the printed total.</div>{% else %}<div class="warning-box">Unit total differs from the printed total by {{ diff|money(2) }}. It can be saved as a draft but not verified until this is resolved.</div>{% endif %}{% endif %}
+{% if preview.ignored_columns %}<p class="small muted">Ignored columns: {{ preview.ignored_columns|join(', ') }}</p>{% endif %}
+{{ unit_table(preview.units, True) }}
+<form method="post" action="/cases/{{ case.id }}/property/rent-roll" class="panel">{{ csrf() }}
+{% for k, v in fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<input type="hidden" name="filename" value="{{ filename }}">
+<textarea name="csv_text" hidden aria-hidden="true">{{ csv_text }}</textarea>
+{% if preview.invalid %}<label class="check"><input type="checkbox" name="skip_invalid"> Skip the {{ preview.invalid|length }} invalid row(s)</label>{% endif %}
+<p><button>Save as draft</button></p></form>
+{% else %}
+<h1>Rent roll as of {{ roll.as_of_date }} <span class="badge {{ {'verified':'verified','draft':'candidate','superseded':'superseded','rejected':'rejected'}[roll.status] }}">{{ roll.status }}</span></h1>
+<p class="small">{{ roll.computed_unit_count }} units · in-place annual rent {{ roll.computed_annual_rent|money }}{% if roll.original_filename %} · source <a href="/cases/{{ case.id }}/documents/{{ roll.document_id }}">{{ roll.original_filename }}</a>{% endif %} · imported by {{ roll.created_by }}{% if roll.verified_by %} · verified by {{ roll.verified_by }} {{ roll.verified_at[:10] }}{% endif %}</p>
+<div class="kpi"><div><b>{{ (summary.units_occupied / summary.units_total * 100)|round(1) }}%</b><span>physical occupancy</span></div>
+<div><b>{{ summary.rent_expiring_12m|money if summary.rent_expiring_12m is not none else '—' }}</b><span>rent expiring within 12 months</span></div>
+<div><b>{{ summary.unknown_lease_ends }}</b><span>occupied units without a lease end</span></div></div>
+{% if roll.status == 'draft' %}
+<div class="panel"><h2 style="margin-top:0">Reconcile and verify</h2>
+<p>{% if roll.reconciled %}<span class="badge verified">RECONCILED</span> The unit total matches the printed total{% if roll.stated_unit_count %} and unit count{% endif %}.{% else %}<span class="badge unverified">NOT RECONCILED</span> Printed total: {{ roll.stated_annual_rent|money if roll.stated_annual_rent else 'not entered' }}{% if roll.stated_unit_count %}, units {{ roll.stated_unit_count }}{% endif %}. The unit total must match within ${{ tolerance }}.{% endif %}</p>
+<form method="post" action="/cases/{{ case.id }}/property/rent-roll/{{ roll.id }}/totals" class="actions">{{ csrf() }}
+<input type="text" name="stated_annual_rent" value="{{ roll.stated_annual_rent or '' }}" placeholder="Printed total annual rent" aria-label="Printed total annual rent">
+<input type="text" name="stated_unit_count" value="{{ roll.stated_unit_count or '' }}" placeholder="Printed unit count" aria-label="Printed unit count"><button class="small secondary">Save totals</button></form>
+{% if roll.reconciled %}<form method="post" action="/cases/{{ case.id }}/property/rent-roll/{{ roll.id }}/verify" class="actions" data-confirm="Verify this rent roll? It becomes immutable.">{{ csrf() }}
+<input type="text" name="verified_by" placeholder="Your name *" required minlength="2" aria-label="Verified by"><button class="small">Verify rent roll</button></form>{% endif %}
+<details><summary class="small">Reject draft</summary><form method="post" action="/cases/{{ case.id }}/property/rent-roll/{{ roll.id }}/reject" class="actions">{{ csrf() }}<input type="text" name="reason" placeholder="Reason *" required minlength="5" aria-label="Reason"><button class="small danger">Reject</button></form></details>
+</div>{% endif %}
+{{ unit_table(roll.units) }}
+{% endif %}
+{% endblock %}

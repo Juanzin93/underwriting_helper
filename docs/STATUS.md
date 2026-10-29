@@ -93,3 +93,22 @@ Known limitations added in M2:
 * CSV import is limited to 1 MB / 5,000 rows per file and never updates existing records.
 
 Still not verified here: the PowerShell scripts on real Windows and the 2 live Ollama tests.
+
+## Platform Milestone 3 — evidence-backed extraction and business/CRE underwriting ✅
+
+Latest test run: **306 passed, 2 skipped** (`python -m pytest -q`; also with `-W error::ResourceWarning`). New tests:
+`tests/unit/test_m3_evidence_cre.py` (21). Details per item: [ROADMAP.md](ROADMAP.md).
+
+Also verified by hand:
+* A database created by the Milestone 2 release (lifecycle demo) upgraded to schema 9: counts preserved, integrity ok,
+  no foreign-key violations, audit chain intact, existing policy versions unchanged, and **all 5 old runs reproduce**.
+  (This check found and fixed a bug: declaring the new CRE policy parameters as schema fields changed the content
+  hash of existing policy versions; they are now validated without altering older policies.)
+* Property, rent-roll, evidence, traceability and deal-memo pages in Chromium at desktop and 390 px width.
+
+Known limitations added in M3:
+* CRE stays a loan type of the commercial module (not a separate module); rent roll and T-12 come from CSV only
+  (export from Excel/PDF tools first). Lease-level details beyond rent, dates, area and market rent are not modelled.
+* Rule results are re-checkable only for runs saved since M3; older runs are re-checked on metrics only.
+* The income-approach value uses a single policy cap rate; it is a cross-check, not an appraisal.
+* Deal memos are HTML/PDF built from stored records; there is no narrative text and no model involvement.

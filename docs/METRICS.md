@@ -36,3 +36,20 @@ Balance-sheet items are taken as of the base period end date (otherwise the late
 
 **Scenarios/sensitivity**: revenue shock scales revenue and COGS; opex shock scales operating expenses; the
 difference flows to net income (taxes unchanged); rate shocks apply to the proposed loan only.
+
+## CRE metrics (Milestone 3, `metrics/cre.py`)
+
+| Metric | Formula |
+|---|---|
+| Property DSCR at stressed rate | NOI ÷ proposed annual debt service at (rate + policy `cre_stress_rate_bps`) |
+| Break-even occupancy | (property opex + proposed annual debt service) ÷ (gross potential rent + other income) |
+| Income-approach value | NOI ÷ policy `cre_cap_rate` — a cross-check, not an appraisal |
+| LTV on income-approach value | loan ÷ income-approach value |
+| Physical occupancy | occupied units ÷ total units (rent roll) |
+| Economic occupancy | in-place annual rent ÷ (in-place rent + market rent of vacant units); not calculated if any vacant unit lacks a market rent |
+| Rollover 12 / 24 months | annual rent of leases ending within 12 / 24 months of the rent-roll date (month-to-month included) ÷ in-place rent |
+| WALT (years) | Σ(rent × remaining days ÷ 365) ÷ Σ rent, occupied units; month-to-month = 0; not calculated if any lease end is unknown |
+
+Rent-roll metrics use the **verified** rent roll in verified-only runs (the newest draft may be used, flagged
+unverified, in preview runs). A rent roll older than 180 days at run time is flagged `stale`.
+Every value in a run can be traced (Metrics → "Evidence trail") and re-checked (Run → "Traceability check").

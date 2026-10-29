@@ -15,7 +15,11 @@ from datetime import date
 from typing import Any
 
 from uwhelper import ENGINE_VERSION
-from uwhelper.analysis.resolver import build_inputs, find_contradictions, missing_checklist
+from uwhelper.analysis.resolver import (
+    build_inputs,
+    find_contradictions,
+    missing_checklist,
+)
 from uwhelper.analysis.scenarios import apply_scenario, sensitivity_grid
 from uwhelper.db.connection import Database, new_id, utcnow
 from uwhelper.domain.enums import OVERALL_STATUS_TEXT
@@ -88,7 +92,15 @@ def compute_run(conn: sqlite3.Connection, case_id: str, *, mode: str = "verified
         "case": case, "policy_id": policy_id, "policy": policy, "inputs": inputs, "metrics": metrics,
         "evaluations": evaluations, "findings": findings, "contradictions": contradictions,
         "overall_status": status, "sensitivity": sensitivity, "mode": mode, "as_of": as_of,
+        "doc_types": doc_types, "guarantor_count": guarantors,
     }
+
+
+def evaluation_context(r: dict[str, Any]) -> dict[str, Any]:
+    return {"as_of": r["as_of"].isoformat(), "document_types": sorted(r["doc_types"]),
+            "contradictions": sorted(({"field_key": c["field_key"], "period_label": c.get("period_label")}
+                                      for c in r["contradictions"]), key=lambda c: (c["field_key"], c["period_label"] or "")),
+            "guarantor_count": r["guarantor_count"]}
 
 
 def inputs_digest(inputs_json: str) -> str:
@@ -113,6 +125,8 @@ def run_underwriting(conn: sqlite3.Connection, case_id: str, *, mode: str = "ver
         "result_counts": _counts(r["evaluations"]),
         "sensitivity": r["sensitivity"],
         "scenario": scenario,
+        # Everything besides the inputs that rules look at, so rule results can be re-checked later.
+        "evaluation_context": evaluation_context(r),
     }
     run_id = new_id()
     with Database.transaction(conn):

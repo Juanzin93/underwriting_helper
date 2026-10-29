@@ -86,6 +86,14 @@
 {{ activity_form('/deals/' ~ deal.id, deal_id=deal.id) }}
 {{ activity_list(activities, '/deals/' ~ deal.id, deal_id=deal.id) }}</div></div>
 
+<h2 id="memos">Deal credit memo</h2>
+<table><tr><th>Version</th><th>Generated</th><th>By</th><th></th></tr>
+{% for mm in memos %}<tr><td>v{{ mm.version }}</td><td class="small">{{ mm.created_at[:16].replace('T',' ') }}</td><td class="small">{{ mm.generated_by }}</td>
+<td><a href="/deals/{{ deal.id }}/memos/{{ mm.id }}/html" target="_blank" rel="noopener">View</a> · <a href="/deals/{{ deal.id }}/memos/{{ mm.id }}/pdf">PDF</a> · <a href="/deals/{{ deal.id }}/memos/{{ mm.id }}/verify">Verify</a></td></tr>
+{% else %}<tr><td colspan="4" class="muted">No memo yet.</td></tr>{% endfor %}</table>
+<form method="post" action="/deals/{{ deal.id }}/memo" class="actions">{{ csrf() }}<button class="small secondary">Generate memo version {{ (memos|length) + 1 }}</button></form>
+<p class="small muted">Combines the deal, people, document checklist and the linked file's latest verified-only run (with its policy version and input hash). Each version is stored and can be re-checked. Preliminary — not a credit approval.</p>
+
 <h2>Timeline</h2>
 <table><tr><th>When (UTC)</th><th>What</th><th>By</th></tr>
 {% for i in timeline %}<tr><td class="small">{{ (i.at or '')[:16].replace('T',' ') }}</td>

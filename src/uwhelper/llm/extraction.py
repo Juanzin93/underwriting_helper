@@ -17,6 +17,8 @@ Pipeline per document:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 import secrets
@@ -65,6 +67,14 @@ STRICT RULES
 7. Use only the allowed field_key values. If two documents or columns disagree, report each value
    separately with its own period; never pick one.
 8. You make no lending decisions and give no opinions. Output JSON only, matching the schema."""
+
+
+def prompt_fingerprint(fields: dict[str, Any] | None = None) -> str:
+    """SHA-256 of everything that shapes the model's task: prompt version, system prompt and JSON schema
+    (which embeds the allowed fields and their descriptions). Document text is hashed separately."""
+    fields = fields if fields is not None else extractable_fields()
+    payload = "\x1f".join([PROMPT_VERSION, SYSTEM_PROMPT, json.dumps(_schema(fields), sort_keys=True)])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _schema(fields: dict[str, Any]) -> dict[str, Any]:
@@ -285,10 +295,17 @@ def extract_document_facts(conn: sqlite3.Connection, client: OllamaClient, case_
     page_text = {p["page_number"]: p["text"] or "" for p in pages}
     injected = {p["page_number"] for p in pages if p["injection_suspected"]}
     run_id = new_id()
+    fields = extractable_fields()
+    doc_sha = conn.execute("SELECT sha256 FROM documents WHERE id=?", (document_id,)).fetchone()["sha256"]
+    options = {"temperature": 0, "seed": "attempt number (0, 1, …)", "num_ctx": client.num_ctx, "think": False,
+               "max_chars_per_chunk": max_chars, "retries": retries, "format": "json_schema"}
     with Database.transaction(conn):
         conn.execute(
-            """INSERT INTO extraction_runs(id, case_id, document_id, model_name, prompt_version, status, started_at)
-               VALUES (?,?,?,?,?, 'running', ?)""", (run_id, case_id, document_id, client.model, PROMPT_VERSION, utcnow()))
+            """INSERT INTO extraction_runs(id, case_id, document_id, model_name, prompt_version, status, started_at,
+                   prompt_sha256, document_sha256, options_json)
+               VALUES (?,?,?,?,?, 'running', ?,?,?,?)""",
+            (run_id, case_id, document_id, client.model, PROMPT_VERSION, utcnow(), prompt_fingerprint(fields), doc_sha,
+             json.dumps(options, sort_keys=True)))
 
     def _finish(status: str, created: int, total: int, failed: int, code: str | None, message: str | None,
                 digest: str | None = None) -> None:
@@ -306,9 +323,15 @@ def extract_document_facts(conn: sqlite3.Connection, client: OllamaClient, case_
     except OllamaError as exc:
         _finish("failed", 0, 0, 0, exc.code, str(exc))
         return ExtractionSummary(run_id, "failed", 0, 0, 0, {}, exc.code, str(exc))
+    try:
+        server_version: str | None = client.version()
+    except OllamaError:
+        server_version = None
 
-    fields = extractable_fields()
     chunks = chunk_pages(pages, max_chars)
+    with Database.transaction(conn):
+        conn.execute("UPDATE extraction_runs SET pages_json=?, ollama_version=? WHERE id=?",
+                     (json.dumps(sorted({p["page_number"] for c in chunks for p in c})), server_version, run_id))
     if not chunks:
         msg = "The document has no extractable text (scanned pages need Tesseract OCR)."
         _finish("failed", 0, 0, 0, "no_text", msg, info.digest)
@@ -431,3 +454,20 @@ def list_extraction_runs(conn: sqlite3.Connection, case_id: str) -> list[dict[st
     return [dict(r) for r in conn.execute(
         """SELECT e.*, d.original_filename FROM extraction_runs e JOIN documents d ON d.id=e.document_id
            WHERE e.case_id=? ORDER BY e.started_at DESC""", (case_id,))]
+
+
+def extraction_provenance(conn: sqlite3.Connection, run_id: str | None) -> dict[str, Any] | None:
+    """Everything needed to say how a candidate fact was produced (shown next to facts and in evidence trails)."""
+    if not run_id:
+        return None
+    row = conn.execute(
+        """SELECT e.*, d.original_filename, d.sha256 AS current_document_sha256 FROM extraction_runs e
+           JOIN documents d ON d.id=e.document_id WHERE e.id=?""", (run_id,)).fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    out["pages"] = json.loads(out["pages_json"]) if out.get("pages_json") else None
+    out["options"] = json.loads(out["options_json"]) if out.get("options_json") else None
+    out["document_unchanged"] = (out["document_sha256"] == out["current_document_sha256"]) if out.get("document_sha256") else None
+    out["prompt_matches_current"] = (out["prompt_sha256"] == prompt_fingerprint()) if out.get("prompt_sha256") else None
+    return out

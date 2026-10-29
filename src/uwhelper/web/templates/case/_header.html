@@ -18,7 +18,7 @@
 </div>
 <nav class="tabs" aria-label="Analysis sections">
 {% set tabs = [("overview","Overview",""),("documents","Documents","/documents"),("review","Extraction review","/review"),
-  ("financials","Financial data","/financials"),("metrics","Metrics","/metrics"),("findings","Findings","/findings"),
+  ("financials","Financial data","/financials")] + ([("property","Property (rent roll & T-12)","/property")] if case.loan_type == 'commercial_real_estate' else []) + [("metrics","Metrics","/metrics"),("findings","Findings","/findings"),
   ("missing","Missing info","/missing"),("contradictions","Contradictions","/contradictions"),("scenarios","Stress tests","/scenarios"),
   ("runs","Run history","/runs"),("reports","Screening reports","/reports")] %}
 {% for key, label, path in tabs %}<a href="/cases/{{ case.id }}{{ path }}" class="{{ 'active' if active == key else '' }}" {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}

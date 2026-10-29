@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Evidence · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p><a href="/cases/{{ case.id }}/metrics?run_id={{ run_id }}">← Metrics of run #{{ run.run_number }}</a>{% if trail %} · <a href="/cases/{{ case.id }}/runs/{{ run_id }}/evidence">Traceability of all metrics</a>{% endif %}</p>
+{% if report %}
+<h1>Traceability — run #{{ run.run_number }}</h1>
+<div class="kpi"><div><b>{{ report.traced }} / {{ report.computed }}</b><span>computed metrics fully traced to facts, records or labelled assumptions</span></div>
+<div><b>{{ report.unverified|length }}</b><span>computed metric(s) using unverified values</span></div></div>
+{% if report.untraced %}<div class="warning-box">Some values have no recorded source: {% for r in report.untraced %}<b>{{ r.label }}</b> ({{ r.problems|join('; ') }}){% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
+<h2>Reproduction check</h2>
+<p>{% if repro.reproduced %}<span class="badge verified">REPRODUCED</span> Recomputing {{ repro.metrics_checked }} metrics{% if repro.rules_checked %} and every rule result{% endif %} from the saved inputs and {{ repro.policy }} gives the same results.
+{% else %}<span class="badge rejected">DIFFERENCES</span> {{ repro.error or '' }}{% endif %}
+{% if not repro.rules_checked %}<br><span class="small muted">This run predates stored rule context; only metrics were re-checked.</span>{% endif %}
+{% if not repro.snapshot_intact %}<br><b>The stored input snapshot no longer matches its SHA-256.</b>{% endif %}
+<br><span class="small muted">Engine then: {{ repro.engine_version_then }} · now: {{ repro.engine_version_now }}</span></p>
+{% for d in repro.metric_differences %}<p class="small">Metric <b>{{ d.metric }}</b>: saved {{ d.saved|join(' / ') }}, now {{ (d.recomputed or [])|join(' / ') }}</p>{% endfor %}
+{% for d in repro.rule_differences %}<p class="small">Rule <b>{{ d.rule }}</b>: saved {{ d.saved|join(' / ') }}, now {{ (d.recomputed or ['—'])|join(' / ') }}</p>{% endfor %}
+<h2>Metrics</h2>
+<table><tr><th>Metric</th><th>Traced</th><th>Unverified inputs</th><th></th></tr>
+{% for r in report.rows %}<tr><td>{{ r.label }}</td><td>{% if r.traced %}<span class="badge verified">yes</span>{% else %}<span class="badge rejected">no</span>{% endif %}</td>
+<td>{% if r.uses_unverified %}<span class="badge unverified">yes</span>{% else %}—{% endif %}</td><td><a href="/cases/{{ case.id }}/runs/{{ run_id }}/metrics/{{ r.metric_key }}">Evidence trail</a></td></tr>{% endfor %}</table>
+{% else %}
+{% set m = trail.metric %}
+<h1>{{ m.label }} <span class="small muted">run #{{ run.run_number }} · {{ run.mode.replace('_',' ') }}</span></h1>
+<p><b>{{ m.value|fmtval(m.unit) if m.value is not none else 'Not calculated' }}</b> · <span class="formula">{{ m.formula }}</span></p>
+<p class="small">{{ m.explanation }}</p>
+{% if m.status == 'computed' %}<p>{% if trail.traced %}<span class="badge verified">FULLY TRACED</span>{% else %}<span class="badge rejected">NOT FULLY TRACED</span> {{ trail.problems|join('; ') }}{% endif %}</p>{% endif %}
+{% for i in trail.inputs %}<div class="panel">
+<h3 style="margin-top:0">{{ i.label }} <span class="small muted">{{ i.value if i.value is not none else '—' }}</span>
+<span class="badge {{ {'fact':'user','record':'user','assumption':'candidate','derived':'','missing':'rejected','untraced':'rejected'}[i.kind] }}">{{ i.kind|upper }}</span>
+{% if i.kind in ('fact', 'record') %}{% if i.verified %}<span class="badge verified">VERIFIED at run time</span>{% else %}<span class="badge unverified">UNVERIFIED at run time</span>{% endif %}{% endif %}</h3>
+{% if i.note %}<p class="small muted">{{ i.note }}</p>{% endif %}
+{% if i.kind == 'derived' %}<p class="small">Calculated by another metric: <a href="/cases/{{ case.id }}/runs/{{ run_id }}/metrics/{{ i.derived.metric_key }}">{{ i.derived.label }}</a> = {{ i.derived.value|fmtval(i.derived.unit) }} ({{ i.derived.formula }}){% if not i.derived.traced %} <span class="badge rejected">not fully traced</span>{% endif %}</p>{% endif %}
+{% for f in i.facts %}<table>
+<tr><th style="width:22%">Value</th><td>{{ f.value_numeric or f.value_text }}{% if f.raw_value_text and f.source_type == 'extracted' %} <span class="small muted">(printed as “{{ f.raw_value_text }}”{% if f.scale and f.scale != 'units' %}, in {{ f.scale }}{% endif %})</span>{% endif %} · {{ f.period_label or '' }}{% if f.item_label %} · {{ f.item_label }}{% endif %}</td></tr>
+<tr><th>Origin</th><td>{{ f.source_type.replace('_',' ') }} by {{ f.created_by }} on {{ f.created_at[:16].replace('T',' ') }}{% if f.corrects %} — corrects an earlier value {{ f.corrects.value_numeric or f.corrects.value_text }}{% endif %}</td></tr>
+<tr><th>Source</th><td>{% if f.document_id %}<a href="/cases/{{ case.id }}/documents/{{ f.document_id }}?page={{ f.page_number or 1 }}">{{ f.original_filename }}{% if f.page_number %}, page {{ f.page_number }}{% endif %}</a>{% else %}<span class="muted">no document</span>{% endif %}
+{% if f.excerpt %}<br><span class="mono small">“{{ f.excerpt }}”</span>{% endif %}</td></tr>
+{% if f.provenance %}{% set p = f.provenance %}<tr><th>Extraction</th><td class="small">local model {{ p.model_name }}{% if p.model_digest %} <span class="mono">{{ p.model_digest[:12] }}</span>{% endif %}{% if p.ollama_version %} · Ollama {{ p.ollama_version }}{% endif %} · prompt {{ p.prompt_version }}{% if p.prompt_sha256 %} <span class="mono">{{ p.prompt_sha256[:12] }}</span>{% endif %}
+{% if p.document_sha256 %}<br>document <span class="mono">{{ p.document_sha256[:12] }}</span> {% if p.document_unchanged %}(unchanged){% else %}<span class="badge conflict">document changed since</span>{% endif %}{% endif %}
+{% if p.pages %} · pages sent {{ p.pages|join(', ') }}{% endif %} · run {{ p.started_at[:16].replace('T',' ') }} ({{ p.status }})
+{% if p.prompt_matches_current is false %}<br><span class="muted">The extraction prompt has changed since this run.</span>{% endif %}
+<br><span class="muted">Model output is a candidate only; the value was used because it {{ 'was verified by a person' if i.verified else 'was included in an include-unverified run' }}.</span></td></tr>{% endif %}
+<tr><th>Review history</th><td class="small">{% for e in f.events %}{{ e.occurred_at[:16].replace('T',' ') }} {{ e.event_type }}{% if e.to_status %} → {{ e.to_status }}{% endif %} by {{ e.actor }}{% if e.note %} ({{ e.note }}){% endif %}<br>{% else %}—{% endfor %}
+Current status: <b>{{ f.status }}</b></td></tr></table>{% endfor %}
+{% for r in i.records %}<p class="small">{{ r.source_type.replace('_',' ') }} record · status {{ r.status }}{% if r.document_id %} · <a href="/cases/{{ case.id }}/documents/{{ r.document_id }}?page={{ r.page_number or 1 }}">source document{% if r.page_number %} p.{{ r.page_number }}{% endif %}</a>{% endif %}</p>{% endfor %}
+</div>{% endfor %}
+{% endif %}
+{% endblock %}

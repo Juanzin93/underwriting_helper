@@ -31,3 +31,10 @@ otherwise NO_EXCEPTIONS_IDENTIFIED ("not a credit approval").
 SBA 7(a)/504 and private/hard-money are listed as **not implemented**. Implementing them requires a policy whose
 `source_description` cites the specific, dated program document (e.g. the SOP version) and, likely, a new
 module with program-specific fields (eligibility, guarantee %, fees).
+
+## CRE parameters and versions (Milestone 3)
+`parameters.cre_cap_rate` (0–1, e.g. 0.075) and `parameters.cre_stress_rate_bps` (0–2000) feed the CRE cross-check
+metrics; when absent those metrics are UNKNOWN. `demo_cre` v1.2.0 adds them plus four rules and takes effect on
+2026-11-01; until then v1.1.0 applies. A file can pin a version (policy key + version on the file).
+**Policies → Compare two versions** shows header, parameter, rule and condition differences. Saved runs keep the
+version they used, and **Traceability check** on a run recomputes it from its stored inputs and that version.

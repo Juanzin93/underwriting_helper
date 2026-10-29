@@ -112,11 +112,20 @@ def _check_entity(conn: sqlite3.Connection, case_id: str, spec: FieldSpec, entit
     return None
 
 
+def _actor() -> str:
+    from uwhelper.core.identity import current_actor
+
+    return current_actor()
+
+
 def _event(conn: sqlite3.Connection, fact_id: str, event_type: str, from_status: str | None, to_status: str | None,
            note: str | None = None) -> None:
+    from uwhelper.core.identity import current_actor
+
     conn.execute(
-        "INSERT INTO fact_events(fact_id, event_type, from_status, to_status, note, occurred_at) VALUES (?,?,?,?,?,?)",
-        (fact_id, event_type, from_status, to_status, note, utcnow()),
+        "INSERT INTO fact_events(fact_id, event_type, from_status, to_status, note, actor, occurred_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (fact_id, event_type, from_status, to_status, note, current_actor(), utcnow()),
     )
 
 
@@ -132,12 +141,12 @@ def insert_fact(conn: sqlite3.Connection, *, case_id: str, field_key: str, value
     conn.execute(
         """INSERT INTO facts(id, case_id, field_key, period_id, entity_ref, item_label, value_numeric, value_text, unit,
                currency, raw_value_text, scale, source_type, document_id, page_number, excerpt, extraction_run_id,
-               model_name, model_confidence, evidence_check_json, status, supersedes_fact_id, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               model_name, model_confidence, evidence_check_json, status, supersedes_fact_id, created_at, created_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (fid, case_id, field_key, period_id, entity_ref, item_label or "", value_numeric, value_text, unit,
          currency, raw_value_text, scale, source_type, document_id, page_number, excerpt, extraction_run_id,
          model_name, model_confidence, json.dumps(evidence_check) if evidence_check is not None else None,
-         status, supersedes_fact_id, utcnow()),
+         status, supersedes_fact_id, utcnow(), _actor()),
     )
     _event(conn, fid, "created", None, status, note)
     return fid
@@ -229,9 +238,9 @@ def correct_fact(conn: sqlite3.Connection, case_id: str, fact_id: str, c: Correc
         _event(conn, fact_id, "superseded", old["status"], "superseded", f"Corrected: {c.reason}")
         conn.execute(
             """INSERT INTO user_corrections(id, case_id, original_fact_id, corrected_fact_id, previous_value, new_value,
-                   reason, corrected_at) VALUES (?,?,?,?,?,?,?,?)""",
+                   reason, actor, corrected_at) VALUES (?,?,?,?,?,?,?,?,?)""",
             (new_id(), case_id, fact_id, new_id_, old["value_numeric"] if old["value_numeric"] is not None else old["value_text"],
-             num if num is not None else text, c.reason, utcnow()),
+             num if num is not None else text, c.reason, _actor(), utcnow()),
         )
         touch(conn, case_id)
         audit.record(conn, "fact_corrected", "fact", new_id_, case_id,

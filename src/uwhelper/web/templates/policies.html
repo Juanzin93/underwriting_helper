@@ -5,6 +5,7 @@
 <form method="post" action="/policies/reload"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">Reload policy files</button></form></div>
 <div class="info-box">Policies are YAML files in <span class="mono">{{ settings.policies_dir }}</span>. A registered version is immutable: to change a rule, copy the file,
 bump <span class="mono">version</span>, and reload. Every version stays available so historical runs remain explainable.</div>
+<p><a class="btn secondary small" href="/policies/diff">Compare two versions…</a></p>
 <table><tr><th>Policy</th><th>Version</th><th>Loan types</th><th>Effective</th><th>Illustrative?</th><th>Source</th><th>Runs using it</th><th>Content SHA-256</th></tr>
 {% for p in policies %}<tr><td><a href="/policies/{{ p.id }}">{{ p.name }}</a><br><span class="mono small">{{ p.policy_key }}</span></td><td>v{{ p.version }}</td><td class="small">{{ p.loan_types|join(', ') }}</td>
 <td>{{ p.effective_date }}</td><td>{% if p.illustrative %}<span class="badge unverified">ILLUSTRATIVE</span>{% else %}no{% endif %}</td><td class="small">{{ p.source_description }}<br>{{ p.source_file or '' }}</td><td>{{ usage.get(p.id, 0) }}</td><td class="mono small">{{ p.content_sha256[:12] }}</td></tr>{% endfor %}

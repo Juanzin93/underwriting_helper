@@ -158,3 +158,29 @@ async def add_scenario(request: Request, case_id: str):
         except RunError as exc:
             raise ValidationFailure(str(exc)) from exc
     return redirect(f"/cases/{case_id}/scenarios", "Scenario saved and evaluated. The base case was not changed.")
+
+
+@router.get("/cases/{case_id}/runs/{run_id}/evidence")
+async def run_evidence(request: Request, case_id: str, run_id: str):
+    from uwhelper.analysis.evidence import run_traceability
+
+    with get_db(request).session() as conn:
+        ctx = case_context(conn, case_id)
+        from uwhelper.analysis.reproduce import verify_run
+
+        report = run_traceability(conn, case_id, run_id)
+        repro = verify_run(conn, case_id, run_id)
+        run = conn.execute("SELECT run_number, mode, created_at FROM underwriting_runs WHERE id=?", (run_id,)).fetchone()
+    return render(request, "case/evidence.html", active="metrics", report=report, repro=repro, run_id=run_id,
+                  run=dict(run), trail=None, **ctx)
+
+
+@router.get("/cases/{case_id}/runs/{run_id}/metrics/{metric_key}")
+async def metric_evidence(request: Request, case_id: str, run_id: str, metric_key: str):
+    from uwhelper.analysis.evidence import metric_trail
+
+    with get_db(request).session() as conn:
+        ctx = case_context(conn, case_id)
+        trail = metric_trail(conn, case_id, run_id, metric_key)
+    return render(request, "case/evidence.html", active="metrics", trail=trail, run_id=run_id, run=trail["run"],
+                  report=None, **ctx)

@@ -66,12 +66,9 @@ class Preview:
 
 
 def decode(raw: bytes) -> str:
-    if len(raw) > MAX_BYTES:
-        raise ValidationFailure(f"The CSV file is larger than {MAX_BYTES // 1_000_000} MB; split it into smaller files.")
-    try:
-        return raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        return raw.decode("cp1252", errors="replace")
+    from uwhelper.core.csvutil import decode as _decode
+
+    return _decode(raw, MAX_BYTES)
 
 
 def _norm(header: str) -> str:

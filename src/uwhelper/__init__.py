@@ -6,4 +6,4 @@ instance on a loopback address.
 """
 
 __version__ = "0.5.0"
-ENGINE_VERSION = "commercial-engine/1.0.0"
+ENGINE_VERSION = "commercial-engine/1.1.0"  # 1.1.0: CRE metrics added; existing formulas unchanged

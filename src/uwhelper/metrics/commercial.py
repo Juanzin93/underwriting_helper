@@ -68,6 +68,16 @@ METRIC_SPECS: dict[str, MetricSpec] = {m.key: m for m in [
     M("noi", "Net operating income (property)", "USD", "Effective gross income − Property operating expenses (falls back to reported NOI, flagged, when components are missing)."),
     M("dscr_property", "Property DSCR", "ratio", "NOI ÷ Proposed annual debt service."),
     M("debt_yield", "Debt yield", "percent", "NOI ÷ Requested loan amount."),
+    # --- CRE extensions (metrics/cre.py) ---
+    M("dscr_property_stressed", "Property DSCR at stressed rate", "ratio", "NOI ÷ Proposed annual debt service recalculated at (interest rate + policy stress, in basis points)."),
+    M("breakeven_occupancy", "Break-even occupancy", "percent", "(Property operating expenses + Proposed annual debt service) ÷ (Gross potential rent + Other property income)."),
+    M("income_approach_value", "Income-approach value (policy cap rate)", "USD", "NOI ÷ policy capitalization rate. An illustrative cross-check, not an appraisal."),
+    M("ltv_income_value", "LTV on income-approach value", "percent", "Requested loan amount ÷ Income-approach value."),
+    M("occupancy_physical", "Physical occupancy (rent roll)", "percent", "Occupied units ÷ Total units on the rent roll."),
+    M("occupancy_economic", "Economic occupancy (rent roll)", "percent", "In-place annual rent ÷ (In-place annual rent + Market rent of vacant units)."),
+    M("rollover_12m", "Lease rollover within 12 months", "percent", "Annual rent of leases ending within 12 months of the rent-roll date (month-to-month included) ÷ In-place annual rent."),
+    M("rollover_24m", "Lease rollover within 24 months", "percent", "Annual rent of leases ending within 24 months of the rent-roll date (month-to-month included) ÷ In-place annual rent."),
+    M("walt_years", "Weighted average lease term remaining", "years", "Σ(annual rent × remaining years) ÷ Σ annual rent, occupied units with a lease end (month-to-month = 0 years)."),
 ]}
 
 _PROPAGATE_EXCLUDE = {"derived", "proposed_terms", "user_entered", "extracted"}
@@ -328,7 +338,9 @@ def compute_commercial_metrics(inputs: AnalysisInputs, params: dict | None = Non
 
     # ---------------- CRE / property ----------------
     if lt != "commercial_real_estate":
-        for k in ("effective_gross_income", "noi", "dscr_property", "debt_yield"):
+        from uwhelper.metrics.cre import CRE_METRICS
+
+        for k in ("effective_gross_income", "noi", "dscr_property", "debt_yield", *CRE_METRICS):
             b.na(k, "Property-level metrics apply to commercial real estate loans only.")
     else:
         egi = b.add("effective_gross_income",
@@ -346,6 +358,9 @@ def compute_commercial_metrics(inputs: AnalysisInputs, params: dict | None = Non
         noi_in = noi.as_input("NOI")
         b.add("dscr_property", [noi_in, proposed_in], lambda n, d: _ratio(n, d, "Proposed debt service"))
         b.add("debt_yield", [noi_in, amt_in], lambda n, a: _ratio(n, a, "Requested loan amount"))
+        from uwhelper.metrics.cre import add_cre_metrics
+
+        add_cre_metrics(b, inputs, params, noi_in=noi_in, proposed_in=proposed_in, amt_in=amt_in, rate_in=rate_in)
 
     # Every catalog metric must be present exactly once.
     for key in METRIC_SPECS:

@@ -9,6 +9,10 @@ from typing import Any, Literal
 
 from uwhelper.domain.money import dstr
 
+def _dec(v: Any) -> Decimal | None:
+    return None if v is None else Decimal(str(v))
+
+
 InputState = Literal["ok", "missing", "conflict", "not_meaningful"]
 MetricStatus = Literal["computed", "not_computable", "not_meaningful", "not_applicable"]
 
@@ -42,6 +46,13 @@ class InputValue:
         """A user-entered structural assumption (e.g. proposed loan terms)."""
         return cls(name=name, label=label, value=value, state="ok", verified=True,
                    flags=set(flags or {"proposed_terms"}), note=note)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "InputValue":
+        return cls(name=d["name"], label=d["label"], value=_dec(d.get("value")), state=d.get("state", "missing"),
+                   verified=bool(d.get("verified")), flags=set(d.get("flags") or []),
+                   fact_ids=list(d.get("fact_ids") or []), sources=list(d.get("sources") or []),
+                   note=d.get("note") or "")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -146,6 +157,27 @@ class GuarantorInput:
 
 
 @dataclass
+class RentRollInput:
+    """Aggregates of the rent roll used by a run (see uwhelper.cre.rent_roll.summarize)."""
+    rent_roll_id: str
+    as_of: str
+    status: str
+    values: dict[str, InputValue] = field(default_factory=dict)
+
+    def get(self, key: str, label: str) -> InputValue:
+        return self.values.get(key) or InputValue.missing(key, label, "Not determinable from the rent roll.")
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "RentRollInput":
+        return cls(d["rent_roll_id"], d["as_of"], d["status"],
+                   {k: InputValue.from_dict(v) for k, v in (d.get("values") or {}).items()})
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"rent_roll_id": self.rent_roll_id, "as_of": self.as_of, "status": self.status,
+                "values": {k: v.to_dict() for k, v in sorted(self.values.items())}}
+
+
+@dataclass
 class LoanTermsInput:
     requested_amount: Decimal | None = None
     interest_rate: Decimal | None = None  # annual, decimal (0.0825 = 8.25%)
@@ -175,6 +207,7 @@ class AnalysisInputs:
     terms: LoanTermsInput = field(default_factory=LoanTermsInput)
     scenario: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    rent_roll: RentRollInput | None = None
 
     def get(self, key: str, label: str | None = None) -> InputValue:
         iv = self.values.get(key)
@@ -184,6 +217,36 @@ class AnalysisInputs:
 
     def clone(self) -> "AnalysisInputs":
         return copy.deepcopy(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "AnalysisInputs":
+        """Rebuild the inputs a saved run used (inverse of ``to_dict``) — for reproduction checks."""
+        iv = InputValue.from_dict
+        t = d.get("terms") or {}
+        return cls(
+            loan_type=d["loan_type"], period_label=d.get("period_label"), period_end=d.get("period_end"),
+            period_months=d.get("period_months"), balance_sheet_label=d.get("balance_sheet_label"),
+            values={k: iv(v) for k, v in (d.get("values") or {}).items()},
+            adjustments=[iv(a) for a in d.get("adjustments") or []],
+            excluded_adjustments=[iv(a) for a in d.get("excluded_adjustments") or []],
+            debts=[DebtInput(x["id"], x["creditor"], iv(x["balance"]), iv(x["annual_payment"]), x["to_be_refinanced"],
+                             _dec(x.get("interest_rate")), x.get("maturity_date")) for x in d.get("debts") or []],
+            debt_schedule_confirmed=bool(d.get("debt_schedule_confirmed")),
+            collateral=[CollateralInput(x["id"], x["description"], x["collateral_type"], iv(x["value"]),
+                                        x.get("valuation_date"), x.get("valuation_method"),
+                                        _dec(x.get("prior_lien_balance")) or Decimal(0), x.get("lien_position", 1))
+                        for x in d.get("collateral") or []],
+            guarantors=[GuarantorInput(x["id"], x["name"], iv(x["personal_income"]), iv(x["living_expenses"]),
+                                       iv(x["personal_debt_service"])) for x in d.get("guarantors") or []],
+            terms=LoanTermsInput(
+                requested_amount=_dec(t.get("requested_amount")), interest_rate=_dec(t.get("interest_rate")),
+                term_months=t.get("term_months"), amortization_months=t.get("amortization_months"),
+                repayment_type=t.get("repayment_type") or "amortizing", rate_type=t.get("rate_type") or "fixed",
+                project_total_cost=_dec(t.get("project_total_cost")), is_secured=bool(t.get("is_secured", True)),
+                loan_purpose=t.get("loan_purpose")),
+            scenario=d.get("scenario") or {}, notes=list(d.get("notes") or []),
+            rent_roll=RentRollInput.from_dict(d["rent_roll"]) if d.get("rent_roll") else None,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -228,4 +291,5 @@ class AnalysisInputs:
             },
             "scenario": self.scenario,
             "notes": list(self.notes),
-        }
+        } | ({"rent_roll": self.rent_roll.to_dict()} if self.rent_roll else {})
+        # (rent_roll is only present when a rent roll is used, so snapshots of files without one are unchanged)
