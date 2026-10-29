@@ -1,0 +1,46 @@
+# ---- Borrower data protection -------------------------------------------
+# The application stores its data OUTSIDE the repository by default
+# (%LOCALAPPDATA%\UWHelper on Windows). These patterns are a second line of
+# defence in case a data directory is pointed inside the repo.
+data/
+uwh_data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backups/
+*.uwhbackup.zip
+reports_out/
+# Never commit real financial documents. Synthetic samples are generated
+# on demand by samples/generate_sample_docs.py into samples/generated/.
+*.pdf
+*.PDF
+*.tif
+*.tiff
+*.png
+*.jpg
+*.jpeg
+samples/generated/
+uwhelper.toml
+.env
+
+# ---- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Editors / OS ---------------------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

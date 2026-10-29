@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_macros.html" import fact_badges, source_ref %}
+{% block title %}Fact history{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p><a href="/cases/{{ case.id }}/review">← Extraction review</a></p>
+<h2>Version history</h2>
+{% for v in history.versions %}
+<div class="panel">
+<b>Version {{ loop.index }}</b> — {{ v.field_label }} · {{ v|fact_value }} {{ fact_badges(v) }}<br>
+<span class="small">Created {{ v.created_at }} · {{ SOURCE_LABELS.get(v.source_type) }} · {{ source_ref(v, case.id) }}{% if v.model_name %} · model {{ v.model_name }}{% endif %}</span>
+{% if v.excerpt %}<div class="excerpt">{{ v.excerpt }}</div>{% endif %}
+<table><tr><th>When</th><th>Event</th><th>From → To</th><th>Note</th></tr>
+{% for e in v.events %}<tr><td class="small">{{ e.occurred_at }}</td><td>{{ e.event_type }}</td><td>{{ e.from_status or '—' }} → {{ e.to_status or '—' }}</td><td class="small">{{ e.note or '' }}</td></tr>{% endfor %}
+</table></div>
+{% endfor %}
+{% if history.corrections %}<h2>Corrections</h2>
+<table><tr><th>When</th><th>Previous</th><th>New</th><th>Reason</th></tr>
+{% for c in history.corrections %}<tr><td class="small">{{ c.corrected_at }}</td><td>{{ c.previous_value }}</td><td>{{ c.new_value }}</td><td>{{ c.reason }}</td></tr>{% endfor %}</table>{% endif %}
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="panel">
+<h2 style="margin-top:0">Permanently delete this case</h2>
+<div class="danger-box">This removes the case, its facts, correction history, runs, scenarios, reports, its audit trail and any
+uploaded documents not used by another case. A single tombstone audit entry (case number only) remains. This cannot be undone —
+make a backup first if you may need the data (<span class="mono">python -m uwhelper backup</span>).</div>
+<form method="post" action="/cases/{{ case.id }}/delete" data-confirm="Permanently delete this case?">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="confirm_case_number">Type the case number <b>{{ case.case_number }}</b> to confirm</label>
+<input type="text" id="confirm_case_number" name="confirm_case_number" autocomplete="off" required>
+<p><button class="danger" type="submit">Delete permanently</button> <a class="btn secondary" href="/cases/{{ case.id }}">Cancel</a></p>
+</form>
+</div>
+{% endblock %}

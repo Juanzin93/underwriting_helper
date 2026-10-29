@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_macros.html" import result %}
+{% block title %}Findings · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+{% include "case/_run_banner.html" %}
+{% if run %}
+<p class="small muted">{{ run.summary.policy.disclaimer }} A FAIL triggers human review; it is not a denial. A PASS is a screening result, not an approval.</p>
+<div class="kpi">{% for r in ['PASS','FAIL','REVIEW_REQUIRED','UNKNOWN','NOT_APPLICABLE'] %}<div><b>{{ run.summary.result_counts.get(r, 0) }}</b><span>{{ r|result_label }}</span></div>{% endfor %}</div>
+<h2>Rule evaluations</h2>
+<table>
+<tr><th>Rule</th><th>Result</th><th class="num">Observed</th><th>Requirement</th><th>Why</th><th>Evidence</th></tr>
+{% for e in run.evaluations %}
+<tr><td><b>{{ e.rule_id }}</b> <span class="small muted">v{{ e.rule_version }} · {{ e.severity }}</span><br><span class="small">{{ e.description }}</span></td>
+<td>{{ result(e.result) }}{% if e.indicative_result %}<br><span class="small muted">would be {{ e.indicative_result }}</span>{% endif %}</td>
+<td class="num">{{ e.observed_value or '—' }}</td><td>{{ (e.operator ~ ' ' ~ e.threshold) if e.threshold else '—' }}</td>
+<td class="small">{{ e.explanation }}<br><span class="muted">Source: {{ e.policy_source }}</span></td>
+<td class="small">{% for ev in e.evidence %}{% if ev.document_id %}<a href="/cases/{{ case.id }}/documents/{{ ev.document_id }}?page={{ ev.page_number or 1 }}">{{ ev.original_filename or 'document' }}{% if ev.page_number %} p.{{ ev.page_number }}{% endif %}</a>{% else %}user entry{% endif %}<span class="muted"> ({{ ev.description }})</span><br>{% else %}—{% endfor %}</td></tr>
+{% endfor %}
+</table>
+<h2>Findings recorded with this run</h2>
+<table><tr><th>Type</th><th>Severity</th><th>Message</th></tr>
+{% for f in run.findings %}<tr><td><span class="badge {{ 'conflict' if f.finding_type == 'contradiction' else 'unverified' }}">{{ f.finding_type|upper }}</span></td><td>{{ f.severity }}</td><td>{{ f.message }}</td></tr>{% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}
+</table>
+{% endif %}
+{% endblock %}

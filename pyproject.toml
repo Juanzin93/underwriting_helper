@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uwhelper"
+version = "0.5.0"
+description = "Local-first personal workbench for preliminary commercial loan underwriting analysis (no cloud AI)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "pymupdf>=1.24.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+uwhelper = "uwhelper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+uwhelper = ["db/migrations/*.sql", "web/templates/*.html", "web/templates/case/*.html", "web/static/*", "reports/templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "ollama: integration tests that need a locally running Ollama with the configured model (opt-in via UWH_RUN_OLLAMA_TESTS=1)",
+    "tesseract: tests that need the Tesseract binary (skipped automatically when not installed)",
+]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

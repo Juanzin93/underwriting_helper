@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ policy.name }}{% endblock %}
+{% block content %}
+<p><a href="/policies">← Policies</a></p>
+<h1>{{ policy.name }} v{{ policy.version }}</h1>
+{% if policy.illustrative %}<div class="warning-box"><b>ILLUSTRATIVE.</b> {{ policy.disclaimer }}</div>{% endif %}
+<p class="small">Key <span class="mono">{{ policy.policy_key }}</span> · module {{ policy.module }} · effective {{ policy.effective_date }} · loan types {{ policy.loan_types|join(', ') }} · source: {{ policy.source_description }} · loaded {{ row.loaded_at }} · SHA-256 <span class="mono">{{ row.content_sha256 }}</span></p>
+<h2>Rules</h2>
+<table><tr><th>Rule</th><th>Type</th><th>Applies to</th><th>Test</th><th>Conditions / exceptions</th><th>Severity</th><th>Held for review when inputs are</th></tr>
+{% for r in policy.rules %}<tr><td><b>{{ r.id }}</b> v{{ r.version }}<br><span class="small">{{ r.description }}</span></td><td>{{ r.type }}</td><td class="small">{{ r.applies_to if r.applies_to == 'all' else r.applies_to|join(', ') }}</td>
+<td class="mono small">{% if r.metric %}{{ r.metric }} {{ r.operator }} {{ r.threshold }}{% if r.round_to is not none %} (rounded {{ r.round_to }} dp){% endif %}{% elif r.required_inputs %}present: {{ r.required_inputs|join(', ') }}{% elif r.documents %}docs: {{ r.documents|join(', ') }}{% elif r.max_age_days %}age ≤ {{ r.max_age_days }} days{% else %}—{% endif %}</td>
+<td class="small">{% for c in r.conditions %}if {{ c.subject }} {{ c.op }} {{ c.value }}<br>{% endfor %}{% for e in r.exceptions %}exception {{ e.id }}: {% for c in e.when %}{{ c.subject }} {{ c.op }} {{ c.value }}{% if not loop.last %} and {% endif %}{% endfor %} → REVIEW_REQUIRED<br>{% endfor %}</td>
+<td>{{ r.severity }}</td><td class="small">{{ r.review_on|join(', ') }}</td></tr>{% endfor %}</table>
+<h2>Parameters</h2><pre class="pagetext">{{ policy.parameters.model_dump_json(indent=2) }}</pre>
+<details><summary>Full stored content (canonical JSON)</summary><pre class="pagetext">{{ content }}</pre></details>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Run history · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p class="small muted">Every run is stored with its policy version, inputs (SHA-256), metrics and rule results. Runs are immutable.</p>
+{% if runs %}
+<form method="get" action="/cases/{{ case.id }}/runs/compare">
+<table><tr><th>A</th><th>B</th><th>Run</th><th>When (UTC)</th><th>Mode</th><th>Scenario</th><th>Policy</th><th>Base period</th><th>Status</th><th>Inputs hash</th><th></th></tr>
+{% for r in runs %}<tr><td><input type="radio" name="a" value="{{ r.id }}" {% if loop.index == 2 %}checked{% endif %} aria-label="Compare as A"></td><td><input type="radio" name="b" value="{{ r.id }}" {% if loop.first %}checked{% endif %} aria-label="Compare as B"></td>
+<td><b>#{{ r.run_number }}</b></td><td class="small">{{ r.created_at[:19].replace('T',' ') }}</td><td>{{ r.mode.replace('_',' ') }}</td><td>{{ r.scenario_name or 'base' }}</td>
+<td>{{ r.policy_key }} v{{ r.policy_version }}</td><td class="small">{{ r.base_period_label or '—' }}</td><td>{{ r.overall_status.replace('_',' ') }}</td><td class="mono small">{{ r.inputs_sha256[:12] }}</td>
+<td><a href="/cases/{{ case.id }}/findings?run_id={{ r.id }}">findings</a> · <a href="/cases/{{ case.id }}/metrics?run_id={{ r.id }}">metrics</a></td></tr>{% endfor %}
+</table>
+{% if runs|length > 1 %}<p><button type="submit" class="secondary">Compare A → B</button></p>{% endif %}
+</form>
+{% else %}<p class="muted">No runs yet.</p>{% endif %}
+{% endblock %}

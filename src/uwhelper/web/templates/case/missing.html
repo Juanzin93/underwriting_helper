@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Missing information · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p class="small muted">Live checklist for a {{ loan_types[case.loan_type].label|lower }} (computed now, in {{ mode.replace('_',' ') }} mode). Missing evidence stays missing — nothing is estimated.
+<a href="?mode={{ 'include_unverified' if mode == 'verified_only' else 'verified_only' }}">Switch to {{ 'include unverified' if mode == 'verified_only' else 'verified only' }}</a></p>
+<table>
+<tr><th>Status</th><th>Item</th><th>Details</th><th>Why it matters</th></tr>
+{% for i in items %}
+<tr><td>{% if i.status == 'complete' %}<span class="res res-pass">✔ Complete</span>{% elif i.status == 'not_applicable' %}<span class="res res-na">– N/A</span>{% elif i.status == 'unverified' %}<span class="res res-review">⚠ Unverified</span>{% else %}<span class="res res-fail">✖ Missing</span>{% endif %}</td>
+<td><b>{{ i.label }}</b></td><td class="small">{% for d in i.details %}{{ d }}<br>{% endfor %}</td><td class="small muted">{{ i.why }}</td></tr>
+{% endfor %}
+</table>
+{% endblock %}

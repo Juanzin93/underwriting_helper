@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Audit log · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<p class="small muted">Append-only. Entries record identifiers, field names and statuses — not document text.</p>
+<table><tr><th>When (UTC)</th><th>Action</th><th>Entity</th><th>Details</th></tr>
+{% for e in events %}<tr><td class="small">{{ e.occurred_at }}</td><td>{{ e.action.replace('_',' ') }}</td><td class="small">{{ e.entity_type }} <span class="mono">{{ (e.entity_id or '')[:10] }}</span></td>
+<td class="small mono">{% for k, v in e.details.items() %}{{ k }}={{ v }}{% if not loop.last %}; {% endif %}{% endfor %}</td></tr>{% endfor %}
+</table>
+{% endblock %}

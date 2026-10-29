@@ -1,0 +1,17 @@
+<div class="actions" style="justify-content: space-between">
+<div><h1 style="margin-bottom:0">{{ case.case_number }} · {{ case.borrower.legal_name }}</h1>
+<span class="muted">{{ case.title }} · {{ loan_types[case.loan_type].label }} · policy {{ case.policy_key or 'default' }}{% if case.policy_version %} v{{ case.policy_version }}{% endif %} · status {{ case.status }}</span>
+{% if case.is_synthetic %}<span class="badge">SYNTHETIC SAMPLE</span>{% endif %}</div>
+<form method="post" action="/cases/{{ case.id }}/run" class="actions">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<select name="mode" aria-label="Run mode"><option value="verified_only">Verified facts only</option><option value="include_unverified">Preview incl. unverified (flagged)</option></select>
+<button type="submit">▶ Run screening</button>
+</form>
+</div>
+<nav class="tabs" aria-label="Case sections">
+{% set tabs = [("overview","Overview",""),("documents","Documents","/documents"),("review","Extraction review","/review"),
+  ("financials","Financial data","/financials"),("metrics","Metrics","/metrics"),("findings","Findings","/findings"),
+  ("missing","Missing info","/missing"),("contradictions","Contradictions","/contradictions"),("scenarios","Scenarios","/scenarios"),
+  ("runs","Run history","/runs"),("reports","Reports","/reports"),("audit","Audit log","/audit")] %}
+{% for key, label, path in tabs %}<a href="/cases/{{ case.id }}{{ path }}" class="{{ 'active' if active == key else '' }}" {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>

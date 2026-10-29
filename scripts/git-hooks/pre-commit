@@ -1,0 +1,10 @@
+#!/bin/sh
+# UW Helper: refuse to commit anything that could be borrower data.
+blocked=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ei '\.(pdf|png|jpe?g|tiff?|db|sqlite3?|db-wal|db-shm|zip|xlsx?|csv|docx?)$|(^|/)(data|uwh_data|backups|reports_out)/')
+if [ -n "$blocked" ]; then
+  echo "pre-commit: refusing to commit files that may contain borrower data:" >&2
+  echo "$blocked" >&2
+  echo "Keep documents in the data directory (outside the repo). Override only if certain: git commit --no-verify" >&2
+  exit 1
+fi
+exit 0

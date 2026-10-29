@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Loan cases{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between"><h1>Loan cases</h1><a class="btn" href="/cases/new">+ New loan case</a></div>
+{% if not cases %}
+<div class="info-box">No cases yet. Create one, or load the fictional sample case from a terminal:
+<span class="mono">python -m uwhelper load-sample</span></div>
+{% else %}
+<table>
+<tr><th>Case</th><th>Borrower</th><th>Loan type</th><th class="num">Requested</th><th>Docs</th><th>Unverified facts</th><th>Last screening</th><th>Status</th><th>Updated</th></tr>
+{% for c in cases %}
+<tr>
+<td><a href="/cases/{{ c.id }}"><b>{{ c.case_number }}</b></a><br><span class="small">{{ c.title }}</span>{% if c.is_synthetic %} <span class="badge">SYNTHETIC</span>{% endif %}</td>
+<td>{{ c.legal_name }}</td>
+<td>{{ loan_types[c.loan_type].label if c.loan_type in loan_types else c.loan_type }}</td>
+<td class="num">{{ c.requested_amount|money }}</td>
+<td>{{ c.document_count }}</td>
+<td>{% if c.pending_facts %}<span class="badge unverified">⚠ {{ c.pending_facts }}</span>{% else %}0{% endif %}</td>
+<td>{% if c.last_status %}<span class="small">{{ c.last_status.replace('_',' ') }}</span>{% else %}<span class="muted small">not run</span>{% endif %}</td>
+<td>{{ c.status }}</td>
+<td class="small">{{ c.updated_at[:16].replace('T',' ') }}</td>
+</tr>
+{% endfor %}
+</table>
+{% endif %}
+{% endblock %}

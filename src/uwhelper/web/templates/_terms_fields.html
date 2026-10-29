@@ -1,0 +1,15 @@
+{% set t = terms or {} %}
+<div class="row">
+<div><label for="{{ prefix }}requested_amount">Requested amount ($)</label><input type="text" id="{{ prefix }}requested_amount" name="{{ prefix }}requested_amount" value="{{ t.requested_amount or '' }}" placeholder="500,000"></div>
+<div><label for="{{ prefix }}interest_rate">Interest rate (annual %)</label><input type="text" id="{{ prefix }}interest_rate" name="{{ prefix }}interest_rate" value="{{ (t.interest_rate|rate).rstrip('%') if t.interest_rate else '' }}" placeholder="8.25"></div>
+<div><label for="{{ prefix }}rate_type">Rate type</label><select id="{{ prefix }}rate_type" name="{{ prefix }}rate_type"><option value="fixed">Fixed</option><option value="variable" {% if t.rate_type == 'variable' %}selected{% endif %}>Variable</option></select></div>
+<div><label for="{{ prefix }}repayment_type">Repayment</label><select id="{{ prefix }}repayment_type" name="{{ prefix }}repayment_type"><option value="amortizing">Amortizing (level payments)</option><option value="interest_only" {% if t.repayment_type == 'interest_only' %}selected{% endif %}>Interest only</option></select></div>
+</div>
+<div class="row">
+<div><label for="{{ prefix }}term_months">Term (months)</label><input type="number" id="{{ prefix }}term_months" name="{{ prefix }}term_months" min="1" max="600" value="{{ t.term_months or '' }}"></div>
+<div><label for="{{ prefix }}amortization_months">Amortization (months)</label><input type="number" id="{{ prefix }}amortization_months" name="{{ prefix }}amortization_months" min="1" max="600" value="{{ t.amortization_months or '' }}"></div>
+<div><label for="{{ prefix }}project_total_cost">Total project cost ($, for LTC)</label><input type="text" id="{{ prefix }}project_total_cost" name="{{ prefix }}project_total_cost" value="{{ t.project_total_cost or '' }}"></div>
+<div><label for="{{ prefix }}requested_closing_date">Requested closing date</label><input type="date" id="{{ prefix }}requested_closing_date" name="{{ prefix }}requested_closing_date" value="{{ t.requested_closing_date or '' }}"></div>
+</div>
+<label for="{{ prefix }}loan_purpose">Loan purpose</label><input type="text" id="{{ prefix }}loan_purpose" name="{{ prefix }}loan_purpose" value="{{ t.loan_purpose or '' }}">
+<label class="check"><input type="checkbox" name="is_secured" {% if t.is_secured is not defined or t.is_secured %}checked{% endif %}> Secured loan</label>

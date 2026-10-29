@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, fact_badges, source_ref %}
+{% block title %}Extraction review · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="info-box">Compare every value with its source page before verifying. AI confidence is the model's <b>self-estimate</b>, not a measure of accuracy.
+Corrections never overwrite: they create a new version and keep the original.</div>
+<form method="get" class="actions panel">
+<label for="status" style="margin:0">Show</label>
+<select id="status" name="status">{% for s, label in [('candidate','Unverified candidates'),('verified','Verified'),('rejected','Rejected'),('superseded','Superseded (corrected)'),('all','All')] %}<option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ label }} ({{ counts.get(s, '') if s != 'all' else counts.values()|sum }})</option>{% endfor %}</select>
+<label for="document_id" style="margin:0">from</label>
+<select id="document_id" name="document_id"><option value="">All sources</option>{% for d in docs %}<option value="{{ d.id }}" {% if doc_filter == d.id %}selected{% endif %}>{{ d.original_filename }}</option>{% endfor %}</select>
+<button class="secondary small" type="submit">Filter</button>
+</form>
+{% if not facts %}<p class="muted">Nothing to show.</p>{% else %}
+<form method="post" action="/cases/{{ case.id }}/facts/verify-bulk" id="bulk" data-confirm="Verify all selected facts? Only do this after checking each against its source.">{{ csrf() }}</form>
+<table>
+<tr>{% if status == 'candidate' %}<th><input type="checkbox" data-check-all="fact_ids" aria-label="Select all" form="bulk"></th>{% endif %}<th>Field</th><th>Period</th><th class="num">Value</th><th>Source &amp; evidence</th><th>Status</th><th>Actions</th></tr>
+{% for f in facts %}
+<tr>
+{% if status == 'candidate' %}<td><input type="checkbox" name="fact_ids" value="{{ f.id }}" form="bulk" aria-label="Select"></td>{% endif %}
+<td><b>{{ f.field_label }}</b>{% if f.item_label %}<br><span class="small">{{ f.item_label }}</span>{% endif %}{% if f.party_name %}<br><span class="small">{{ f.party_name }}</span>{% endif %}</td>
+<td class="small">{{ f.period_label or 'n/a' }}</td>
+<td class="num">{{ f|fact_value }}{% if f.raw_value_text and f.source_type == 'extracted' %}<br><span class="small muted">printed: {{ f.raw_value_text }}{% if f.scale and f.scale != 'units' %} ({{ f.scale }}){% endif %}</span>{% endif %}</td>
+<td class="small">{{ source_ref(f, case.id) }}
+{% if f.excerpt %}<div class="excerpt">{{ f.excerpt }}</div>{% endif %}
+{% if f.evidence_check %}<span class="muted">{% if f.evidence_check.value_found_on_page %}✔ value found on page{% endif %}
+{% if f.evidence_check.excerpt_found_on_page == false %} · excerpt not verbatim (system window shown){% endif %}</span>{% endif %}
+{% if f.model_confidence is not none %}<br><span class="muted">model self-estimate: {{ (f.model_confidence * 100)|round|int }}% (not a verified accuracy)</span>{% endif %}
+{% if f.model_name %}<br><span class="muted mono">{{ f.model_name }}</span>{% endif %}</td>
+<td>{{ fact_badges(f) }}</td>
+<td class="small">
+<div class="actions">
+{% if f.status == 'candidate' %}<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/verify" class="inline">{{ csrf() }}<button class="small">✔ Verify</button></form>{% endif %}
+{% if f.status == 'verified' %}<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/unverify" class="inline">{{ csrf() }}<button class="small secondary">Unverify</button></form>{% endif %}
+{% if f.status == 'rejected' %}<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/restore" class="inline">{{ csrf() }}<button class="small secondary">Restore</button></form>{% endif %}
+<a class="small" href="/cases/{{ case.id }}/facts/{{ f.id }}/history">History</a>
+</div>
+{% if f.status in ('candidate','verified') %}
+<details><summary>Correct</summary>
+<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/correct">{{ csrf() }}
+<label>Correct value</label><input type="text" name="new_value" required value="{{ f.value_numeric or f.value_text or '' }}">
+<label>Reason (required)</label><input type="text" name="reason" required minlength="3" placeholder="e.g. misread column; page shows 1,240,500">
+<label class="check"><input type="checkbox" name="mark_verified" checked> Mark corrected value verified</label>
+<button class="small" type="submit">Save correction</button></form></details>
+<details><summary>Reject</summary>
+<form method="post" action="/cases/{{ case.id }}/facts/{{ f.id }}/reject">{{ csrf() }}
+<label>Reason (required)</label><input type="text" name="reason" required minlength="3" placeholder="e.g. wrong field mapping">
+<button class="small danger" type="submit">Reject</button></form></details>
+{% endif %}
+</td></tr>
+{% endfor %}
+</table>
+{% if status == 'candidate' %}<p><button form="bulk" type="submit">Verify selected</button></p>{% endif %}
+{% endif %}
+{% endblock %}

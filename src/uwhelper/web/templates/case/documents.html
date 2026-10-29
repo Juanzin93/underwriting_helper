@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Documents · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+<div class="grid2">
+<div class="panel">
+<h2 style="margin-top:0">Upload documents</h2>
+<form method="post" action="/cases/{{ case.id }}/documents?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data">
+<label for="files">Files (PDF, PNG, JPG, TIFF, TXT; max {{ settings.max_upload_mb }} MB each)</label>
+<input type="file" id="files" name="files" multiple required accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.txt">
+<div class="row">
+<div><label for="doc_type">Document type</label><select id="doc_type" name="doc_type">{% for k, v in doc_types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+<div><label for="period_label">Period label (optional)</label><input type="text" id="period_label" name="period_label" placeholder="FY2025"></div>
+<div><label for="password">PDF password (optional, never stored)</label><input type="password" id="password" name="password" autocomplete="off"></div>
+</div>
+<p><button type="submit">Upload &amp; process locally</button></p>
+<p class="small muted">Each file is hashed (SHA-256). An identical file is never stored twice. Text is read with PyMuPDF; pages without a text layer are OCR'd with local Tesseract.</p>
+</form>
+</div>
+<div class="panel">
+<h2 style="margin-top:0">Local AI extraction</h2>
+<p>Sends page text from processed documents to <b>{{ settings.ollama_model }}</b> running on <span class="mono">{{ settings.ollama_url }}</span>.
+Results are saved as <span class="badge candidate">⚠ UNVERIFIED</span> <span class="badge ai">AI-EXTRACTED</span> candidates and are not used in verified-only runs until you verify them.</p>
+<form method="post" action="/cases/{{ case.id }}/extract">{{ csrf() }}
+<label for="document_id">Document</label><select id="document_id" name="document_id"><option value="">All processed documents</option>
+{% for d in documents if d.processing_status in ('processed','partial') %}<option value="{{ d.id }}">{{ d.original_filename }}</option>{% endfor %}</select>
+<p><button type="submit">Run local extraction</button></p></form>
+{% if auto_refresh %}<div class="info-box">Extraction is running… this page refreshes automatically.</div>{% endif %}
+</div>
+</div>
+
+<h2>Documents on this case</h2>
+{% if documents %}
+<table>
+<tr><th>File</th><th>Type</th><th>Pages</th><th>Processing</th><th>OCR</th><th>Warnings</th><th>Facts</th><th>Last extraction</th><th>SHA-256</th></tr>
+{% for d in documents %}
+<tr><td><a href="/cases/{{ case.id }}/documents/{{ d.id }}">{{ d.original_filename }}</a><br><span class="small muted">{{ (d.size_bytes / 1024)|round(1) }} KB · added {{ d.added_at[:10] }}</span></td>
+<td>{{ doc_types.get(d.doc_type, d.doc_type) }}{% if d.period_label %}<br><span class="small">{{ d.period_label }}</span>{% endif %}</td>
+<td>{{ d.page_count or '—' }}</td>
+<td><span class="badge {{ 'verified' if d.processing_status == 'processed' else 'conflict' if d.processing_status in ('failed','encrypted','unsupported') else 'unverified' }}">{{ d.processing_status|upper }}</span>
+{% if d.processing_error %}<br><span class="small">{{ d.processing_error }}</span>{% endif %}</td>
+<td>{{ d.ocr_pages }}</td>
+<td>{% if d.injection_flags %}<span class="badge conflict" title="Text resembling instructions to an AI was found. It is treated as data only.">⚠ {{ d.injection_flags }} page(s) with embedded instructions</span>{% endif %}</td>
+<td>{{ d.fact_count }}</td><td>{{ d.last_extraction_status or '—' }}</td><td class="mono small">{{ d.sha256[:12] }}…</td></tr>
+{% endfor %}
+</table>
+{% else %}<p class="muted">No documents yet.</p>{% endif %}
+
+{% if extraction_runs %}
+<h2>Extraction runs</h2>
+<table><tr><th>Started</th><th>Document</th><th>Model</th><th>Prompt</th><th>Status</th><th>Facts</th><th>Chunks failed</th><th>Notes</th></tr>
+{% for r in extraction_runs %}<tr><td class="small">{{ r.started_at[:19].replace('T',' ') }}</td><td>{{ r.original_filename }}</td><td class="small">{{ r.model_name }}{% if r.model_digest %}<br><span class="mono">{{ r.model_digest[:12] }}</span>{% endif %}</td>
+<td class="small">{{ r.prompt_version }}</td><td><span class="badge {{ 'verified' if r.status == 'completed' else 'unverified' if r.status in ('running','partial') else 'conflict' }}">{{ r.status|upper }}</span></td>
+<td>{{ r.facts_created }}</td><td>{{ r.chunks_failed }}/{{ r.chunks_total }}</td><td class="small">{{ r.error_message or '' }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+{% endblock %}

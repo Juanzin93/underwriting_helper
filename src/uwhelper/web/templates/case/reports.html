@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Reports · {{ case.case_number }}{% endblock %}
+{% block content %}
+{% include "case/_header.html" %}
+{% if not runs %}<div class="info-box">Run the screening first; reports are built from a saved run.</div>{% else %}
+<div class="panel">
+<h2 style="margin-top:0">Generate preliminary credit analysis</h2>
+<form method="post" action="/cases/{{ case.id }}/reports">{{ csrf() }}
+<div class="row"><div><label>From run</label><select name="run_id">{% for r in runs %}<option value="{{ r.id }}">#{{ r.run_number }} — {{ r.scenario_name or 'base' }} — {{ r.mode }} — {{ r.overall_status }}</option>{% endfor %}</select></div>
+<div><label>Format</label><select name="format"><option value="both">HTML + PDF</option><option value="html">HTML</option><option value="pdf">PDF</option></select></div></div>
+<label class="check"><input type="checkbox" name="include_narrative"> Include a MODEL-GENERATED narrative from the local model (labelled; numbers are checked against the results)</label>
+<p><button type="submit">Generate report</button> <a class="btn secondary" href="/cases/{{ case.id }}/reports/preview?run_id={{ runs[0].id }}" target="_blank" rel="noopener">Preview latest run</a></p>
+</form></div>
+{% endif %}
+<h2>Report versions</h2>
+{% if reports %}<table><tr><th>Version</th><th>Format</th><th>Run</th><th>Narrative</th><th>Created</th><th>SHA-256</th><th></th></tr>
+{% for r in reports %}<tr><td>v{{ r.version }}</td><td>{{ r.format|upper }}</td><td>#{{ r.run_number }}</td><td>{{ 'yes' if r.includes_narrative else 'no' }}</td><td class="small">{{ r.created_at }}</td><td class="mono small">{{ r.content_sha256[:12] }}</td>
+<td>{% if r.format == 'pdf' %}<a href="/cases/{{ case.id }}/reports/{{ r.id }}?inline=1" target="_blank" rel="noopener">open</a> · <a href="/cases/{{ case.id }}/reports/{{ r.id }}">download</a>{% else %}<a href="/cases/{{ case.id }}/reports/{{ r.id }}" target="_blank" rel="noopener">open</a>{% endif %}</td></tr>{% endfor %}</table>
+{% else %}<p class="muted">No reports yet.</p>{% endif %}
+{% endblock %}
