@@ -96,6 +96,8 @@ class Settings:
     # Name recorded as the actor on audit events; default = the Windows/OS account name.
     actor_name: str | None = None
     ollama_health_timeout_seconds: float = 2.0
+    # Lender criteria confirmed longer ago than this are flagged as stale in matching.
+    criteria_max_age_days: int = 180
 
     # Optional external integrations: OFF unless both the master switch and the named integration are enabled.
     external_integrations_allowed: bool = False
@@ -136,6 +138,8 @@ class Settings:
             raise ConfigError("Cloud-hosted Ollama models are not allowed; choose a locally downloaded model.")
         if not 1000 <= self.db_busy_timeout_ms <= 600000:
             raise ConfigError("db_busy_timeout_ms must be between 1000 and 600000.")
+        if not 1 <= self.criteria_max_age_days <= 3650:
+            raise ConfigError("criteria_max_age_days must be between 1 and 3650.")
         if self.log_level.upper() not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
             raise ConfigError("log_level must be DEBUG, INFO, WARNING or ERROR.")
         if self.integration_names and not self.external_integrations_allowed:

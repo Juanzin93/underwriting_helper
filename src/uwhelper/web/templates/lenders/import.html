@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Import lender catalog{% endblock %}
+{% block content %}
+<p><a href="/lenders">← Lender programs</a></p>
+<h1>Import lender catalog</h1>
+{% if not plan %}
+<form method="post" action="/lenders/import/preview?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data" class="panel">
+<label>YAML file</label><input type="file" name="file" accept=".yaml,.yml,text/yaml" required><p><button>Preview</button></p></form>
+<p class="small">Format: see <span class="mono">samples/lender_catalog_example.yaml</span> (fictional). Lenders are matched by name, programs by name within the lender; criteria become a new version only if they changed. The file is read in memory and not stored. Nothing is fetched from the internet.</p>
+{% else %}
+<table><tr><th>Lender</th><th>Program</th><th>Criteria version</th><th>Problems</th></tr>
+{% for x in plan %}<tr><td>{{ x.lender }}{% if not x.lender_exists %} <span class="badge verified">new</span>{% endif %}</td><td>{{ x.program }}{% if not x.program_id %} <span class="badge verified">new</span>{% else %} <span class="small muted">(update)</span>{% endif %}</td>
+<td>{{ {'new':'new version','unchanged':'unchanged','none':'—'}[x.version_action] }}{% if x.version %} <span class="small muted">({{ x.version.criteria|length }} criteria, confirmed {{ x.version.verified_at }})</span>{% endif %}</td>
+<td class="small">{% if x.errors %}<span class="badge rejected">error</span> {{ x.errors|join('; ') }}{% endif %}</td></tr>{% endfor %}</table>
+{% set errors = plan|selectattr('errors')|list %}
+<form method="post" action="/lenders/import/commit" class="panel">{{ csrf() }}<textarea name="yaml_text" hidden aria-hidden="true">{{ yaml_text }}</textarea>
+{% if errors %}<p class="warning-box">{{ errors|length }} program(s) have errors. Fix the file and preview again — nothing is imported while errors remain.</p>
+{% else %}<p><button>Import</button> <span class="small muted">One transaction: everything is saved or nothing is.</span></p>{% endif %}</form>
+{% endif %}
+{% endblock %}

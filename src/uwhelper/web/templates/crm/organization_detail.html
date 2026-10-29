@@ -14,6 +14,8 @@
 <label>Notes</label><textarea name="notes">{{ o.notes or '' }}</textarea><p><button class="small">Save</button></p></form></div>
 <div class="panel"><h2 style="margin-top:0">People</h2><ul>{% for c in o.contacts %}<li><a href="/contacts/{{ c.id }}">{{ c.first_name }} {{ c.last_name }}</a> — {{ c.role }}{% if c.is_primary %} (primary){% endif %}</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul>
 <h2>Deals (as borrower)</h2><ul>{% for d in o.deals %}<li><a href="/deals/{{ d.id }}">{{ d.deal_number }}</a> {{ d.name }} ({{ d.status }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul>
+{% if o.org_type == 'lender' %}<h2>Lender programs</h2><ul>{% for pr in programs %}<li><a href="/lenders/programs/{{ pr.id }}">{{ pr.name }}</a>{% if pr.latest_version %} · criteria v{{ pr.latest_version }} confirmed {{ pr.latest_verified_at }}{% else %} · no criteria yet{% endif %}{% if not pr.active %} (inactive){% endif %}</li>{% else %}<li class="muted">None. <a href="/lenders">Add a program</a>.</li>{% endfor %}</ul>
+<h2>Submissions</h2><p class="small muted">Lender submissions arrive with Milestone 5.</p>{% endif %}
 <h2>Underwriting files (as borrower)</h2><ul>{% for f in files %}<li><a href="/cases/{{ f.id }}">{{ f.case_number }}</a> {{ f.title }} ({{ f.stage }})</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul></div></div>
 
 <div class="grid2"><div class="panel"><h2 style="margin-top:0">Tasks</h2>

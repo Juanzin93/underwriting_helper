@@ -1,0 +1,9 @@
+{% set pp = p if p is defined else none %}
+<div class="row"><div><label>Deal types (none = any)</label>
+<label class="check"><input type="checkbox" name="deal_types" value="small_business" {% if pp and 'small_business' in pp.deal_types %}checked{% endif %}> small business</label>
+<label class="check"><input type="checkbox" name="deal_types" value="cre" {% if pp and 'cre' in pp.deal_types %}checked{% endif %}> CRE</label></div>
+<div><label>Products (none = any; Ctrl-click for several)</label><select name="product_types" multiple size="5">{% for x in products %}<option value="{{ x }}" {% if pp and x in pp.product_types %}selected{% endif %}>{{ x.replace('_',' ') }}</option>{% endfor %}</select></div>
+<div><label>States (e.g. TX, OK; blank = any)</label><input type="text" name="states" value="{{ pp.states|join(', ') if pp else '' }}"></div></div>
+<div class="row"><div><label>Minimum amount ($)</label><input type="text" name="min_amount" value="{{ pp.min_amount or '' if pp else '' }}"></div>
+<div><label>Maximum amount ($)</label><input type="text" name="max_amount" value="{{ pp.max_amount or '' if pp else '' }}"></div></div>
+<label>Notes</label><textarea name="notes">{{ pp.notes or '' if pp else '' }}</textarea>

@@ -86,6 +86,13 @@
 {{ activity_form('/deals/' ~ deal.id, deal_id=deal.id) }}
 {{ activity_list(activities, '/deals/' ~ deal.id, deal_id=deal.id) }}</div></div>
 
+<h2 id="matching">Lender matching</h2>
+<table><tr><th>Saved</th><th>Based on run</th><th>By</th><th></th></tr>
+{% for mr in match_runs[:10] %}<tr><td class="small">{{ mr.created_at[:16].replace('T',' ') }}</td><td>{% if mr.run_number %}#{{ mr.run_number }}{% if not mr.run_current %} <span class="badge unverified">out of date</span>{% endif %}{% else %}—{% endif %}</td><td class="small">{{ mr.created_by }}</td><td><a href="/deals/{{ deal.id }}/matches/{{ mr.id }}">Open</a></td></tr>
+{% else %}<tr><td colspan="4" class="muted">Not matched yet.</td></tr>{% endfor %}</table>
+<form method="post" action="/deals/{{ deal.id }}/matches/run" class="actions">{{ csrf() }}<button class="small secondary">Match against lender programs</button></form>
+<p class="small muted">Checks every active <a href="/lenders">lender program</a> against this deal and its file's latest verified-only run, criterion by criterion. Results are saved so they can be cited later.</p>
+
 <h2 id="memos">Deal credit memo</h2>
 <table><tr><th>Version</th><th>Generated</th><th>By</th><th></th></tr>
 {% for mm in memos %}<tr><td>v{{ mm.version }}</td><td class="small">{{ mm.created_at[:16].replace('T',' ') }}</td><td class="small">{{ mm.generated_by }}</td>

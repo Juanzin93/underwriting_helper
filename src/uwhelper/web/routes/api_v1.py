@@ -37,6 +37,7 @@ from uwhelper.crm.models import (
     TaskPatch,
 )
 from uwhelper.documents.storage import UploadRejected
+from uwhelper.lenders.models import CriteriaVersionIn, ProgramIn, ProgramPatch
 from uwhelper.repo.cases import ValidationFailure
 from uwhelper.web.app import get_db
 
@@ -422,6 +423,91 @@ def run_trace(request: Request, case_id: str, run_id: str) -> JSONResponse:
 
     with get_db(request).session() as conn:
         return _json(run_traceability(conn, case_id, run_id))
+
+
+# ---------------------------------------------------------------------------------------- lenders
+@router.get("/lender-programs")
+def lender_programs(request: Request, organization_id: str | None = None, include_inactive: bool = False) -> JSONResponse:
+    from uwhelper.lenders import service as L
+
+    with get_db(request).session() as conn:
+        return _json({"items": L.list_programs(conn, organization_id=organization_id,
+                                               include_inactive=include_inactive)})
+
+
+@router.post("/lender-programs")
+def lender_program_create(request: Request, body: ProgramIn) -> JSONResponse:
+    from uwhelper.lenders import service as L
+
+    with get_db(request).session() as conn:
+        return _json(L.get_program(conn, L.create_program(conn, body)), 201)
+
+
+@router.get("/lender-programs/{program_id}")
+def lender_program(request: Request, program_id: str) -> JSONResponse:
+    from uwhelper.lenders import service as L
+
+    with get_db(request).session() as conn:
+        return _json(L.get_program(conn, program_id))
+
+
+@router.patch("/lender-programs/{program_id}")
+def lender_program_patch(request: Request, program_id: str, body: ProgramPatch) -> JSONResponse:
+    from uwhelper.lenders import service as L
+
+    with get_db(request).session() as conn:
+        changed = L.update_program(conn, program_id, body)
+        return _json({"program": L.get_program(conn, program_id), "changed": changed})
+
+
+@router.post("/lender-programs/{program_id}/versions")
+def lender_program_version(request: Request, program_id: str, body: CriteriaVersionIn) -> JSONResponse:
+    from uwhelper.lenders import service as L
+
+    with get_db(request).session() as conn:
+        res = L.add_version(conn, program_id, body)
+        return _json(res, 201 if res["created"] else 200)
+
+
+@router.post("/lender-catalog/import")
+def lender_catalog_import(request: Request, file: UploadFile = File(...), dry_run: bool = True) -> JSONResponse:
+    from uwhelper.core.csvutil import decode
+    from uwhelper.lenders import importer as LI
+
+    text = decode(file.file.read(1_000_001))
+    with get_db(request).session() as conn:
+        if dry_run:
+            return _json({"dry_run": True, "programs": [
+                {"lender": p.lender, "program": p.program, "lender_exists": p.lender_exists,
+                 "program_exists": bool(p.program_id), "criteria_version": p.version_action, "errors": p.errors}
+                for p in LI.plan_yaml(conn, text)]})
+        return _json({"dry_run": False, **LI.commit_yaml(conn, text)}, 201)
+
+
+@router.post("/deals/{deal_id}/matches")
+def deal_matches_run(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.lenders import matching
+
+    with get_db(request).session() as conn:
+        mid = matching.run_matching(conn, deal_id, max_age_days=request.app.state.settings.criteria_max_age_days)
+        return _json(matching.get_match_run(conn, deal_id, mid), 201)
+
+
+@router.get("/deals/{deal_id}/matches")
+def deal_matches(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.lenders import matching
+
+    with get_db(request).session() as conn:
+        crm.get_deal(conn, deal_id)
+        return _json({"items": matching.list_match_runs(conn, deal_id)})
+
+
+@router.get("/deals/{deal_id}/matches/{match_id}")
+def deal_match(request: Request, deal_id: str, match_id: str) -> JSONResponse:
+    from uwhelper.lenders import matching
+
+    with get_db(request).session() as conn:
+        return _json(matching.get_match_run(conn, deal_id, match_id))
 
 
 @router.get("/pipeline")

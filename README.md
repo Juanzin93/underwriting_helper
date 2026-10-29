@@ -27,6 +27,8 @@ structuring, due diligence, closing, funding and servicing — entirely on your 
   count as verified, plus stressed DSCR, break-even occupancy, occupancy, lease rollover and WALT;
 * shows an **evidence trail** for every metric (fact → page → extraction run / person) and can **re-check any saved
   run** against its stored inputs and exact policy version; generates a versioned **credit memo per deal**;
+* keeps a **lender catalog** with versioned, dated criteria and shows **explainable matching** for each deal
+  (every criterion PASS / FAIL / UNKNOWN with the reason; stale criteria flagged; nothing is sent to lenders);
 * offers a local JSON API (`/api/v1`, schema at `/api/v1/openapi.json`) and a `/health` endpoint.
 
 Step-by-step Windows install, configuration, backup and restore: **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**.
@@ -102,7 +104,7 @@ record or import payments, covenants, alerts) → **Portfolio** (top menu).
 ## 3. Tests
 
 ```powershell
-scripts\run_tests.ps1                # 308 tests (2 need Ollama); no Ollama or internet needed
+scripts\run_tests.ps1                # 321 tests (2 need Ollama); no Ollama or internet needed
 scripts\run_tests.ps1 -Ollama        # also runs live tests against your local model
 # or: .\.venv\Scripts\python -m pytest -q
 ```
@@ -117,6 +119,7 @@ scripts\run_tests.ps1 -Ollama        # also runs live tests against your local m
 | `python -m uwhelper load-sample` | Load the synthetic sample case |
 | `python -m uwhelper load-lifecycle-demo` | Load synthetic cases at every lifecycle stage |
 | `python -m uwhelper verify-audit` | Verify the audit log hash chain |
+| `python -m uwhelper import-lenders FILE [--dry-run]` | Import a lender catalog YAML (try `samples/lender_catalog_example.yaml`, fictional) |
 | `python -m uwhelper sample-pdfs --out samples\generated` | Write the synthetic PDFs to disk |
 | `python -m uwhelper backup [--out FILE]` / `restore FILE [--force]` | Backup / restore |
 | `python -m uwhelper extract CASE_ID DOCUMENT_ID` | Run extraction from the CLI |
@@ -158,6 +161,7 @@ src/uwhelper/
   core/                error envelope, request IDs
   crm/                 organizations, contacts, deals, pipeline sync, tasks, document checklists, activities, CSV import
   cre/                 rent rolls and property operating statements (T-12) for CRE files
+  lenders/             lender programs, versioned criteria, explainable matching, catalog import
   integrations/        disabled-by-default registry for future opt-in adapters (none implemented)
   db/                  SQLite connection, transactions, checksum-verified migrations (migrations/*.sql)
   domain/              Decimal money parsing/rounding, enums, Pydantic input models
@@ -185,7 +189,7 @@ periods, verified-only) → metrics (Python) → policy engine → immutable run
 closing → human-confirmed funding → servicing.**
 
 Upgrading an existing installation: pull the new code, run `pip install -e . --no-deps`, back up, then start the app —
-migrations 0002–0009 run automatically, existing cases start in INTAKE, keep working without a deal, and their borrowers are linked to organizations (nothing is deleted).
+migrations 0002–0010 run automatically, existing cases start in INTAKE, keep working without a deal, and their borrowers are linked to organizations (nothing is deleted).
 
 More detail: [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md), [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE_ASSESSMENT.md](docs/ARCHITECTURE_ASSESSMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with ER diagram), [docs/METRICS.md](docs/METRICS.md),
 [docs/POLICIES.md](docs/POLICIES.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/OPERATIONS.md](docs/OPERATIONS.md),

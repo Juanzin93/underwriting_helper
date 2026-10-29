@@ -106,6 +106,9 @@ async def deal_detail(request: Request, deal_id: str):
         from uwhelper.reports import deal_memo
 
         extra["memos"] = deal_memo.list_memos(conn, deal_id)
+        from uwhelper.lenders.matching import list_match_runs
+
+        extra["match_runs"] = list_match_runs(conn, deal_id)
     return render(request, "crm/deal_detail.html", deal=deal, contacts=contacts, orgs=orgs, unlinked_files=unlinked,
                   **extra,
                   product_types=PRODUCT_TYPES, contact_types=CONTACT_TYPES,
@@ -389,11 +392,14 @@ async def org_detail(request: Request, org_id: str):
         o = crm.get_organization(conn, org_id)
         tasks = task_svc.list_tasks(conn, view="all", organization_id=org_id)
         activities = acts.list_activities(conn, organization_id=org_id)
+        from uwhelper.lenders.service import list_programs
+
+        programs = list_programs(conn, organization_id=org_id, include_inactive=True) if o["org_type"] == "lender" else []
         files = [dict(r) for r in conn.execute(
             """SELECT c.id, c.case_number, c.title, c.stage FROM borrowers b JOIN loan_cases c ON c.id=b.case_id
                WHERE b.organization_id=? ORDER BY c.created_at DESC""", (org_id,))]
     return render(request, "crm/organization_detail.html", o=o, org_types=ORG_TYPES, tasks=tasks,
-                  activities=activities, files=files)
+                  activities=activities, files=files, programs=programs)
 
 
 @router.post("/organizations/{org_id}/{action}")

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ p.name }} · {{ p.lender_name }}{% endblock %}
+{% block content %}
+<p><a href="/lenders">← Lender programs</a></p>
+<h1>{{ p.name }} <span class="small muted">{{ p.lender_name }}</span>{% if not p.active %} <span class="badge superseded">INACTIVE</span>{% endif %}</h1>
+{% if p.current %}<p>Criteria <b>v{{ p.current.version }}</b> in effect · confirmed {{ p.current.verified_at }} by {{ p.current.verified_by }} ({{ age }} days ago){% if age > max_age %} <span class="badge rejected">STALE — older than {{ max_age }} days</span>{% endif %} · source: {{ p.current.source }}</p>
+{% else %}<div class="warning-box">No criteria in effect yet. Matching will show this program as "possible" with only its basic eligibility checked.</div>{% endif %}
+<div class="grid2">
+<div class="panel"><h2 style="margin-top:0">Eligibility</h2>
+<form method="post" action="/lenders/programs/{{ p.id }}/edit">{{ csrf() }}
+<label>Name</label><input type="text" name="name" value="{{ p.name }}" required>
+{% include "lenders/_program_fields.html" %}
+<label class="check"><input type="checkbox" name="active" {% if p.active %}checked{% endif %}> active (inactive programs are left out of matching)</label>
+<p><button class="small">Save</button></p></form></div>
+<div class="panel"><h2 style="margin-top:0">New criteria version</h2>
+<form method="post" action="/lenders/programs/{{ p.id }}/version">{{ csrf() }}
+<label>Criteria (YAML list)</label><textarea name="criteria_yaml" rows="12" class="mono">{{ current_yaml }}</textarea>
+<div class="row"><div style="flex:2 1 220px"><label>Source *</label><input type="text" name="source" required minlength="3" placeholder="e.g. program sheet dated …, call with …"></div>
+<div><label>Confirmed on *</label><input type="date" name="verified_at" required max="{{ today }}"></div>
+<div><label>Confirmed by *</label><input type="text" name="verified_by" required minlength="2"></div>
+<div><label>Effective from</label><input type="date" name="effective_date"></div></div>
+<p><button class="small">Save as new version</button></p></form>
+<details><summary class="small">…or upload criteria CSV</summary>
+<form method="post" action="/lenders/programs/{{ p.id }}/version-csv?csrf_token={{ csrf_token|urlencode }}" enctype="multipart/form-data">
+<input type="file" name="file" accept=".csv,text/csv" required>
+<div class="row"><div><label>Source *</label><input type="text" name="source" required minlength="3"></div><div><label>Confirmed on *</label><input type="date" name="verified_at" required max="{{ today }}"></div><div><label>Confirmed by *</label><input type="text" name="verified_by" required minlength="2"></div></div>
+<p class="small muted">Columns: id, description, subject, op, value, required.</p><button class="small secondary">Upload</button></form></details>
+<details><summary class="small">Allowed subjects</summary>{% for kind, names in subjects|dictsort %}<p class="small"><b>{{ kind }}:</b> {{ names|join(', ') }}</p>{% endfor %}
+<p class="small">Operators: &gt;= &gt; &lt;= &lt; == != in not_in (value a|b|c or a list) is_known is_unknown. <span class="mono">required: false</span> shows a failure without ruling the program out.</p></details>
+</div></div>
+<h2>Criteria versions</h2>
+{% for v in p.versions %}<details {% if loop.first %}open{% endif %} class="panel"><summary><b>v{{ v.version }}</b> · effective {{ v.effective_date }} · confirmed {{ v.verified_at }} by {{ v.verified_by }} · {{ v.source }} <span class="mono small">{{ v.criteria_sha256[:10] }}</span></summary>
+<table><tr><th>Id</th><th>Criterion</th><th>Check</th><th>Required</th></tr>{% for c in v.criteria %}<tr><td class="mono small">{{ c.id }}</td><td>{{ c.description }}</td><td class="mono small">{{ c.subject }} {{ c.op }} {{ c.value|join('|') if c.value is iterable and c.value is not string else (c.value if c.value is not none else '') }}</td><td>{{ 'yes' if c.required else 'no' }}</td></tr>{% endfor %}</table></details>
+{% else %}<p class="muted">No versions yet.</p>{% endfor %}
+{% endblock %}

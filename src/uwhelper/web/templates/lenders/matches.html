@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Lender matching · {{ deal.deal_number }}{% endblock %}
+{% block content %}
+<p><a href="/deals/{{ deal.id }}#matching">← {{ deal.deal_number }} · {{ deal.name }}</a></p>
+<h1>Lender matching</h1>
+<p class="small">Saved {{ m.created_at[:16].replace('T',' ') }} UTC by {{ m.created_by }} ·
+{% if r.run %}based on screening run <b>#{{ r.run.run_number }}</b>{% if not r.run.current %} <span class="badge unverified">run out of date</span>{% endif %}{% else %}<span class="badge unverified">no verified-only screening run</span> — metric criteria are UNKNOWN{% endif %}
+· criteria older than {{ r.max_age_days }} days flagged stale{% if not m.intact %} · <span class="badge rejected">stored result altered</span>{% endif %}</p>
+<div class="kpi"><div><b>{{ r.summary.meets_all }}</b><span>meet every recorded check</span></div><div><b>{{ r.summary.possible }}</b><span>possible (unknowns)</span></div><div><b>{{ r.summary.not_a_fit }}</b><span>not a fit</span></div></div>
+<p class="small muted">Order: meets all → possible → not a fit, then fewer failures, fewer unknowns, more passes. UNKNOWN is never counted as a pass. This is a research aid, not a lender decision; nothing is sent to any lender.</p>
+{% for p in r.programs %}<details class="panel" {% if p.fit != 'not_a_fit' %}open{% endif %}>
+<summary><b>{{ p.lender }}</b> · {{ p.program }} — <span class="badge {{ {'meets_all':'verified','possible':'candidate','not_a_fit':'rejected'}[p.fit] }}">{{ fit_text[p.fit] }}</span>
+<span class="small">PASS {{ p.counts.PASS }} · FAIL {{ p.counts.FAIL }} · UNKNOWN {{ p.counts.UNKNOWN }}</span>
+{% if p.criteria_version %}<span class="small muted"> · criteria v{{ p.criteria_version }} confirmed {{ p.verified_at }}</span>{% else %}<span class="badge unverified">no criteria recorded</span>{% endif %}
+{% if p.stale %}<span class="badge rejected">STALE ({{ p.age_days }} d)</span>{% endif %}</summary>
+<table><tr><th>Check</th><th>Observed</th><th>Requirement</th><th>Result</th><th>Why</th></tr>
+{% for c in p.checks %}<tr><td>{{ c.description }}{% if not c.required %} <span class="small muted">(preferred)</span>{% endif %}<br><span class="mono small muted">{{ c.id }} · {{ c.source }}</span></td>
+<td class="small">{{ c.observed if c.observed is not none else '—' }}{% for f in c.flags %} <span class="badge unverified">{{ f }}</span>{% endfor %}</td>
+<td class="mono small">{{ c.subject }} {{ c.op }} {{ c.target|join('|') if c.target is iterable and c.target is not string else (c.target if c.target is not none else '') }}</td>
+<td><span class="badge {{ {'PASS':'verified','FAIL':'rejected','UNKNOWN':'candidate'}[c.result] }}">{{ c.result }}</span></td><td class="small">{{ c.explanation }}</td></tr>{% endfor %}</table>
+{% if p.criteria_source %}<p class="small muted">Source: {{ p.criteria_source }} · <a href="/lenders/programs/{{ p.program_id }}">program page</a></p>{% endif %}
+</details>{% else %}<p class="muted">No active lender programs. <a href="/lenders">Add or import some</a>.</p>{% endfor %}
+{% endblock %}

@@ -106,6 +106,25 @@ def cmd_verify_audit(args, settings) -> int:
     return 0 if v["ok"] else 1
 
 
+def cmd_import_lenders(args, settings) -> int:
+    from uwhelper.bootstrap import initialise
+    from uwhelper.lenders.importer import commit_yaml, plan_yaml
+
+    text = Path(args.file).read_text(encoding="utf-8")
+    db, _ = initialise(settings)
+    with db.session() as conn:
+        plan = plan_yaml(conn, text)
+        for p in plan:
+            state = "ERROR: " + "; ".join(p.errors) if p.errors else \
+                f"{'update' if p.program_id else 'new'} program, criteria {p.version_action}"
+            print(f"  {p.lender} / {p.program}: {state}")
+        if args.dry_run:
+            return 1 if any(p.errors for p in plan) else 0
+        out = commit_yaml(conn, text)
+    print(f"Imported: {out}")
+    return 0
+
+
 def cmd_backup(args, settings) -> int:
     from uwhelper.backup import create_backup
 
@@ -154,6 +173,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("load-sample", help="Load the fictional sample loan case")
     sub.add_parser("load-lifecycle-demo", help="Load fictional cases at every lifecycle stage, incl. a serviced loan")
     sub.add_parser("verify-audit", help="Verify the audit log hash chain")
+    p = sub.add_parser("import-lenders", help="Import a lender catalog YAML file (see samples/lender_catalog_example.yaml)")
+    p.add_argument("file")
+    p.add_argument("--dry-run", action="store_true", help="Only show what would change")
     p = sub.add_parser("sample-pdfs", help="Write the synthetic sample PDFs to a folder")
     p.add_argument("--out", default="samples/generated")
     p = sub.add_parser("backup", help="Write a backup ZIP (database + documents + reports)")
@@ -180,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     _logging(settings)
     handlers = {"serve": cmd_serve, "init": cmd_init, "doctor": cmd_doctor, "load-sample": cmd_load_sample,
-                "load-lifecycle-demo": cmd_load_lifecycle_demo, "verify-audit": cmd_verify_audit,
+                "load-lifecycle-demo": cmd_load_lifecycle_demo, "verify-audit": cmd_verify_audit, "import-lenders": cmd_import_lenders,
                 "sample-pdfs": cmd_sample_pdfs, "backup": cmd_backup, "restore": cmd_restore, "extract": cmd_extract}
     try:
         return handlers[args.command](args, settings)

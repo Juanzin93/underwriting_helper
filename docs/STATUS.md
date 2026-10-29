@@ -112,3 +112,17 @@ Known limitations added in M3:
 * Rule results are re-checkable only for runs saved since M3; older runs are re-checked on metrics only.
 * The income-approach value uses a single policy cap rate; it is a cross-check, not an appraisal.
 * Deal memos are HTML/PDF built from stored records; there is no narrative text and no model involvement.
+
+## Platform Milestone 4 — lender catalog and explainable matching ✅
+
+Latest test run: **319 passed, 2 skipped** (`python -m pytest -q`; also with `-W error::ResourceWarning`). New tests:
+`tests/unit/test_m4_lenders.py` (13). Details per item: [ROADMAP.md](ROADMAP.md).
+
+Also verified by hand: a database created by the Milestone 3 release upgraded to schema 10 with counts preserved,
+integrity ok, audit chain intact and all 5 runs reproducing (rules included); the fictional catalog imported via the
+CLI; lender list, program and matching pages checked in Chromium at desktop and 390 px width.
+
+Known limitations added in M4:
+* Lender criteria are what you enter or import; the app does not look anything up. The sample catalog is fictional.
+* Matching uses the linked file's latest verified-only run; without one, metric criteria are UNKNOWN.
+* Programs have no per-criterion effective dates (the whole version has one) and no state-by-state rule variations.

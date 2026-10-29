@@ -1,0 +1,45 @@
+# FICTIONAL lender catalog for trying out matching. Not real lenders, programs or terms.
+# Import it from Lenders → Import catalog, or: python -m uwhelper import-lenders samples/lender_catalog_example.yaml
+lenders:
+  - name: Riverstone Community Bank (FICTIONAL)
+    programs:
+      - name: Equipment term loans
+        deal_types: [small_business]
+        product_types: [equipment, term_loan]
+        states: [TX, OK, NM]
+        min_amount: 100000
+        max_amount: 2500000
+        criteria_version:
+          source: "Fictional program sheet v3 (example data)"
+          verified_at: 2026-10-01
+          verified_by: Example Broker
+          criteria:
+            - {id: DSCR_MIN, description: "Business DSCR at least 1.25x", subject: "metric:dscr", op: ">=", value: 1.25}
+            - {id: LEVERAGE_MAX, description: "Funded debt / adjusted EBITDA at most 3.5x", subject: "metric:debt_to_ebitda", op: "<=", value: 3.5}
+            - {id: SECURED, description: "Loan must be secured", subject: "case:is_secured", op: "==", value: true}
+            - {id: GLOBAL_DSCR, description: "Global DSCR at least 1.15x", subject: "metric:global_dscr", op: ">=", value: 1.15, required: false}
+  - name: Cobalt Capital Partners (FICTIONAL)
+    programs:
+      - name: CRE bridge
+        deal_types: [cre]
+        product_types: [bridge, cre_purchase]
+        min_amount: 1000000
+        max_amount: 25000000
+        criteria_version:
+          source: "Fictional term sheet template (example data)"
+          verified_at: 2026-03-15
+          verified_by: Example Broker
+          criteria:
+            - {id: DSCR_PROP, description: "Property DSCR at least 1.20x", subject: "metric:dscr_property", op: ">=", value: 1.20}
+            - {id: OCCUPANCY, description: "Physical occupancy at least 80%", subject: "metric:occupancy_physical", op: ">=", value: 0.80}
+      - name: Small business growth lines
+        deal_types: [small_business]
+        product_types: [line_of_credit, working_capital, equipment]
+        max_amount: 750000
+        criteria_version:
+          source: "Fictional program sheet (example data)"
+          verified_at: 2026-09-20
+          verified_by: Example Broker
+          criteria:
+            - {id: DSCR_MIN, description: "Business DSCR at least 1.40x", subject: "metric:dscr", op: ">=", value: 1.40}
+            - {id: CURRENT_RATIO, description: "Current ratio at least 1.2x", subject: "metric:current_ratio", op: ">=", value: 1.2}

@@ -40,22 +40,28 @@ through extraction, the resolver, policies and cases; splitting it would touch a
 has its own package (`uwhelper/cre/`: rent rolls, T-12) and calculations (`metrics/cre.py`) and stays a loan type of
 the commercial module, sharing fields and extraction.
 
-## Milestone 4 — lender and product catalog, explainable matching (next)
+## Milestone 4 — lender and product catalog, explainable matching ✅
+
+| # | Delivered | Verified by (`tests/unit/test_m4_lenders.py`) |
+|---|---|---|
+| 4.1 | Lender programs (lender organization, deal types, products, states, amount range, active flag) and immutable, versioned criteria sets with source, confirmed-on date, confirmed-by and effective date; a version is added only when something changed | `test_program_rules`, `test_versions_are_immutable_*` |
+| 4.2 | Criteria language (`metric:`, `input:`, `terms:`, `case:`, `deal:` subjects; >=, >, <=, <, ==, !=, in, not_in, is_known, is_unknown; optional "preferred" criteria) validated against the metric and field catalogs; YAML catalog import (preview, all-or-nothing, idempotent), criteria CSV upload, `uwhelper import-lenders` CLI; fictional sample catalog | `test_criterion_validation`, `test_yaml_import_*`, `test_criteria_csv` |
+| 4.3 | Explainable matching per deal: every check PASS / FAIL / UNKNOWN with observed value, requirement and reason; grouped meets-all / possible / not-a-fit and ordered only by visible counts; UNKNOWN never counted as PASS; saved immutably citing the run number and each criteria version | `test_matching_explains_every_check`, `test_unknown_is_never_a_pass`, `test_inactive_programs_left_out_*` |
+| 4.4 | Freshness: criteria confirmed more than `UWH_CRITERIA_MAX_AGE_DAYS` (default 180) ago are flagged on matches, the lender list and program pages | `test_freshness_boundary` (180 vs 181 days) |
+| 4.5 | Lender organization page lists programs (submissions placeholder for M5); Lenders menu; API endpoints; offline OpenAPI | `test_lender_pages_and_forms`, `test_lender_api` |
+
+## Milestone 5 — structuring and brokerage (next)
 
 | # | Item | Depends on | Acceptance criteria |
 |---|---|---|---|
-| 4.1 | **Lenders and programs.** `lender_programs` (lender organization, product types, deal types, states, min/max amount, notes), `program_criteria_versions` (immutable criteria sets with `source`, `verified_at`, `verified_by`, effective date) | M2 orgs | A new criteria version never alters an older one; editing creates a version; audit on each |
-| 4.2 | **Criteria language.** Reuse the policy condition subjects (`metric:`, `terms:`, `case:`, `deal:`) with operators; validation against the metric catalog | 4.1, M3 | Unknown metric or field refused with a clear message; YAML/CSV import with preview |
-| 4.3 | **Explainable matching.** For a deal's latest current run: per program, each criterion PASS / FAIL / UNKNOWN with observed value and reason; ranking only by count of PASS/UNKNOWN, never a hidden score | 4.2 | Every match row cites the criteria version and run number; UNKNOWN never treated as PASS |
-| 4.4 | **Freshness.** Criteria older than a configurable age (default 180 days) are flagged on match results and the lender page | 4.1 | Stale flag tested across the boundary date |
-| 4.5 | **Lender CRM view.** Lender organization page shows programs, contacts, past submissions (placeholder until M5) | 4.1 | Page renders with and without programs |
+| 5.1 | **Submission packages.** From a saved matching, choose a program; build a package manifest listing exactly which deal documents (by SHA-256), memo version and figures would be shared; the manifest is stored before any export | M4 | Manifest immutable; export writes a local ZIP only after the user confirms the listed contents; nothing is sent anywhere by the app |
+| 5.2 | **Submission tracking.** Per program: draft → submitted (date, contact, how) → under review → term sheet / declined / withdrawn; deal status moves to LENDER_SUBMISSION when the first submission is recorded | 5.1, M2.1 | Status history per submission; deal sync recorded; reasons required for declines/withdrawals |
+| 5.3 | **Offers / term sheets.** Enter lender terms (amount, rate, index/spread, amortization, term, fees, prepayment, covenants); side-by-side comparison using the structuring engine (payment, DSCR at offered terms, total cost) | 5.2, structuring | All math Decimal and reproducible; an accepted offer becomes the deal's approved terms only with a named person's confirmation |
+| 5.4 | **Referral partners and fees.** Referral source on deals (exists), fee agreements (flat / % of funded amount / split), broker fee and lender-paid compensation schedules | M2 | Fee math tested to the cent, including splits; disclosures text configurable |
+| 5.5 | **Commission ledger.** Expected vs received commissions per funded deal; aging of unpaid commissions | 5.4, funding | Ledger entries immutable (corrections append); totals reconcile in tests |
 
 ## Backlog (planned, not started)
 
-* **M5 — Structuring and brokerage.** Structures per deal (reuse structuring engine), lender submissions (package
-  manifest of exactly which files are shared, recorded before export), offers/term sheets compared side by side,
-  referral partners, commission and fee schedules with splits (Decimal). *Accept:* submission records what was shared;
-  commission math tested; nothing is sent anywhere automatically.
 * **M6 — Credit review to funding.** Map existing decisions/conditions/closing/funding onto deals; lender conditions
   from offers; due-diligence trackers. *Accept:* APPROVED/FUNDED only via human authorization; full audit.
 * **M7 — Servicing and portfolio.** Reuse `servicing/`; portfolio by lender/referral source; covenant and
