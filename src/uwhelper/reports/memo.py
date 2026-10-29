@@ -238,7 +238,7 @@ def build_memo_context(conn: sqlite3.Connection, case_id: str, run_id: str, vers
                         "explanation": e["explanation"]} for e in fails + unknown],
         "strengths": strengths, "mitigants": mitigants,
         "contradictions": [{"field": c["field_label"], "period": c["period_label"],
-                            "values": [{"value": f.get("value_numeric") or f.get("value_text"),
+                            "entries": [{"value": f.get("value_numeric") or f.get("value_text"),
                                         "source": f"{f.get('original_filename') or f['source_type']} p.{f.get('page_number') or '?'}",
                                         "status": f["status"]} for f in c["facts"]]} for c in contradictions],
         "unverified": [{"field": f["field_label"], "period": f["period_label"], "value": f["value_numeric"] or f["value_text"],

@@ -116,7 +116,7 @@ analytical opinion that requires human credit review.{% if m.run.illustrative %}
 {% else %}<p>No unverified facts.</p>{% endif %}
 
 <h2>12. Conflicts between documents</h2>
-{% for c in m.contradictions %}<p><b>{{ c.field }}</b> ({{ c.period or 'n/a' }}): {% for v in c.values %}{{ v.value }} from {{ v.source }} [{{ v.status }}]{% if not loop.last %} vs {% endif %}{% endfor %} — unresolved; no value was chosen.</p>
+{% for c in m.contradictions %}<p><b>{{ c.field }}</b> ({{ c.period or 'n/a' }}): {% for v in c.entries %}{{ v.value }} from {{ v.source }} [{{ v.status }}]{% if not loop.last %} vs {% endif %}{% endfor %} — unresolved; no value was chosen.</p>
 {% else %}<p>No unresolved conflicts.</p>{% endfor %}
 
 <h2>13. Policy exceptions and failed or unknown rules</h2>
