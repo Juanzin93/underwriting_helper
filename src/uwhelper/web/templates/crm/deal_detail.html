@@ -93,6 +93,8 @@
 <form method="post" action="/deals/{{ deal.id }}/matches/run" class="actions">{{ csrf() }}<button class="small secondary">Match against lender programs</button></form>
 <p class="small muted">Checks every active <a href="/lenders">lender program</a> against this deal and its file's latest verified-only run, criterion by criterion. Results are saved so they can be cited later.</p>
 
+{% include "brokerage/_deal_section.html" %}
+
 <h2 id="memos">Deal credit memo</h2>
 <table><tr><th>Version</th><th>Generated</th><th>By</th><th></th></tr>
 {% for mm in memos %}<tr><td>v{{ mm.version }}</td><td class="small">{{ mm.created_at[:16].replace('T',' ') }}</td><td class="small">{{ mm.generated_by }}</td>

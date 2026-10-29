@@ -61,7 +61,7 @@ Target boundaries are **packages inside one process**, not services.
 | lenders, matching | `lenders/` (service, models, matching, importer) | M4 |
 | structuring | `structuring.py`, `metrics/structuring.py` | |
 | origination | `workflow/` (lifecycle, decisions, conditions, closing) | |
-| brokerage | `crm/service.py` deal pipeline | M5 adds submissions/offers/commissions |
+| brokerage | `brokerage/` (packages, submissions & offers, fees & commission ledger); deal pipeline in `crm/` | M5 |
 | servicing | `servicing/` | |
 | direct_lending | — | M8 |
 | reporting | `reports/` | |

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Offers · {{ deal.deal_number }}{% endblock %}
+{% block content %}
+<p><a href="/deals/{{ deal.id }}#submissions">← {{ deal.deal_number }} · {{ deal.name }}</a></p>
+<h1>Offers side by side</h1>
+<p class="small">Calculated with the structuring engine (nominal rates, level payments, cents rounding){% if cmp.basis.run_number %}; DSCR uses {{ cmp.basis.cash_flow_label }} from screening run #{{ cmp.basis.run_number }}{% else %}; no screening run, so DSCR is not shown{% endif %}. Planning estimates — the lender's documents govern.</p>
+{% if cmp.rows %}
+<table><tr><th></th>{% for r in cmp.rows %}<th>{{ r.offer.lender }}<br><span class="small">{{ r.offer.program }}</span><br><span class="badge {{ {'accepted':'verified','declined':'rejected'}.get(r.offer.status, '') }}">{{ 'expired' if r.offer.expired else r.offer.status }}</span></th>{% endfor %}</tr>
+{% macro row(label) %}<tr><th>{{ label }}</th>{% for r in cmp.rows %}<td class="num">{{ caller(r) }}</td>{% endfor %}</tr>{% endmacro %}
+{% call(r) row("Amount") %}{{ r.offer.amount|money }}{% endcall %}
+{% call(r) row("Rate") %}{{ r.offer.annual_rate|rate }} {{ r.offer.rate_type }}{% if r.offer.index_name %} ({{ r.offer.index_name }} + {{ r.offer.spread|rate if r.offer.spread else '?' }}){% endif %}{% endcall %}
+{% call(r) row("Term / amortization / IO") %}{{ r.offer.term_months }} / {{ r.offer.amortization_months }} / {{ r.offer.interest_only_months }} mo{% endcall %}
+{% call(r) row("Payment") %}{% if r.analysis %}{{ r.analysis.level_payment|money(2) }} {{ r.offer.payment_frequency }}{% else %}<span class="small">{{ r.error }}</span>{% endif %}{% endcall %}
+{% call(r) row("Year-1 debt service") %}{{ r.analysis.year1_debt_service|money(2) if r.analysis else '—' }}{% endcall %}
+{% call(r) row("DSCR (year 1 / amortizing)") %}{% if r.analysis and r.analysis.dscr_year1 %}{{ r.analysis.dscr_year1|ratio }} / {{ r.analysis.dscr_amortizing|ratio }}{% else %}—{% endif %}{% endcall %}
+{% call(r) row("Balloon") %}{{ r.analysis.balloon_payment|money(2) if r.analysis else '—' }}{% endcall %}
+{% call(r) row("Total interest over term") %}{{ r.analysis.total_interest|money(2) if r.analysis else '—' }}{% endcall %}
+{% call(r) row("Fees") %}{{ r.analysis.total_fees|money(2) if r.analysis else '—' }}{% endcall %}
+{% call(r) row("Interest + fees") %}<b>{{ r.analysis.total_cost|money(2) if r.analysis else '—' }}</b>{% endcall %}
+{% call(r) row("LTV / LTC") %}{% if r.analysis %}{{ r.analysis.ltv|pct if r.analysis.ltv else '—' }} / {{ r.analysis.ltc|pct if r.analysis.ltc else '—' }}{% endif %}{% endcall %}
+{% call(r) row("Prepayment / covenants") %}<span class="small">{{ r.offer.prepayment_terms or '—' }}<br>{{ r.offer.covenants or '' }}</span>{% endcall %}
+{% call(r) row("Expires") %}{{ r.offer.expires_on or '—' }}{% endcall %}
+<tr><th>Decision</th>{% for r in cmp.rows %}<td>{% if r.offer.status == 'open' and not r.offer.expired %}
+<details><summary class="small">Accept</summary><form method="post" action="/deals/{{ deal.id }}/offers/{{ r.offer.id }}/accept" data-confirm="Record that the borrower accepted this offer?">{{ csrf() }}
+<input type="text" name="decided_by" placeholder="Your name *" required minlength="2" aria-label="Decided by"><input type="text" name="reason" placeholder="Note" aria-label="Note">
+<label class="check"><input type="checkbox" name="confirm" required> The borrower accepted this offer (decision made outside the app)</label><button class="small">Accept</button></form></details>
+<details><summary class="small">Decline</summary><form method="post" action="/deals/{{ deal.id }}/offers/{{ r.offer.id }}/decline">{{ csrf() }}
+<input type="text" name="decided_by" placeholder="Your name *" required minlength="2" aria-label="Decided by"><input type="text" name="reason" placeholder="Reason *" required minlength="5" aria-label="Reason"><button class="small secondary">Decline</button></form></details>
+{% else %}<span class="small">{{ r.offer.decided_by or '' }} {{ (r.offer.decided_at or '')[:10] }}</span>{% endif %}</td>{% endfor %}</tr>
+</table>
+<p class="small muted">"Total interest" and "Interest + fees" cover each offer's own term. An offer with a balloon must be refinanced or repaid at maturity, so a shorter or ballooning offer is not cheaper just because its total is lower; compare payments, DSCR and the balloon together.</p>
+{% else %}<p class="muted">No offers recorded yet.</p>{% endif %}
+{% endblock %}

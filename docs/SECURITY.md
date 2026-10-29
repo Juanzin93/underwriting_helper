@@ -25,6 +25,7 @@ the data directory and talk to `127.0.0.1`.
 | Notes & imports | Note/call text stays in the database only (audit events hold ids, never note text; nothing in the log file); CSV imports are read in memory, not stored |
 | CRE imports | Rent-roll and T-12 CSVs are parsed in memory; only the parsed units/lines are stored (immutable once verified). No model is involved; nothing leaves the PC |
 | Lender catalog | Imported from local files only; matching runs locally; the app never contacts lenders or sends deal data |
+| Submission packages | Built and exported locally only after a named confirmation of the listed files; files re-hashed before export; the app never transmits a package |
 | Attribution | Actor = Windows account name or `UWH_ACTOR_NAME`; this is attribution, not authentication |
 | Redirects | Form "return to" targets must be local paths (no open redirects) |
 | Static files | Settings refuse a data/DB/document folder inside `web/static` |

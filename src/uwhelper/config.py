@@ -98,6 +98,10 @@ class Settings:
     ollama_health_timeout_seconds: float = 2.0
     # Lender criteria confirmed longer ago than this are flagged as stale in matching.
     criteria_max_age_days: int = 180
+    # Included in every exported submission package (DISCLOSURE.txt). Replace with your own wording.
+    broker_disclosure: str = ("Prepared by the broker from information supplied by the borrower and third parties. "
+                              "Figures are preliminary, unaudited and subject to the lender's own underwriting. "
+                              "This package is not a commitment to lend.")
 
     # Optional external integrations: OFF unless both the master switch and the named integration are enabled.
     external_integrations_allowed: bool = False

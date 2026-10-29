@@ -126,3 +126,20 @@ Known limitations added in M4:
 * Lender criteria are what you enter or import; the app does not look anything up. The sample catalog is fictional.
 * Matching uses the linked file's latest verified-only run; without one, metric criteria are UNKNOWN.
 * Programs have no per-criterion effective dates (the whole version has one) and no state-by-state rule variations.
+
+## Platform Milestone 5 — structuring and brokerage ✅
+
+Latest test run: **332 passed, 2 skipped** (`python -m pytest -q`; also with `-W error::ResourceWarning`). New tests:
+`tests/unit/test_m5_brokerage.py` (13). Details per item: [ROADMAP.md](ROADMAP.md).
+
+Also verified by hand: a database created by the Milestone 4 release (lifecycle demo + lender catalog) upgraded to
+schema 11 with integrity ok, audit chain intact and all 5 runs reproducing; offers, package, deal and commission pages
+checked in Chromium at desktop and 390 px width.
+
+Known limitations added in M5:
+* Offer comparison uses nominal rates and level payments (no day-count conventions, rate floors, index resets);
+  totals cover each offer's own term, so balloon offers must be judged with the refinancing risk in mind.
+* Packages are exported as local ZIP files; delivering them, and any e-signature or lender portal, is outside the app.
+* Fee agreements support flat and percentage bases only (no tiered or capped fees); the disclosure is a single text.
+* The deal's FUNDED status is still set by a person on the deal (or synced from the file's funding); the fuller
+  deal-level closing and funding confirmation is planned for Milestone 6.

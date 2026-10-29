@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Commissions{% endblock %}
+{% block content %}
+<h1>Commissions</h1>
+<div class="kpi"><div><b>{{ rep.totals.receivable|money(2) }}</b><span>owed to the broker</span></div><div><b>{{ rep.totals.received|money(2) }}</b><span>received</span></div>
+<div><b>{{ rep.totals.payable|money(2) }}</b><span>owed to referral partners</span></div></div>
+<h2>Receivable by age</h2>
+<table><tr>{% for b in rep.buckets %}<th class="num">{{ b }} days</th>{% endfor %}</tr><tr>{% for b, v in rep.buckets.items() %}<td class="num">{{ v|money(2) }}</td>{% endfor %}</tr></table>
+<h2>By deal</h2>
+<table><tr><th>Deal</th><th>Status</th><th class="num">Expected</th><th class="num">Received</th><th class="num">Receivable</th><th>Age</th><th class="num">Owed out</th></tr>
+{% for r in rep.rows %}<tr><td><a href="/deals/{{ r.deal_id }}#fees">{{ r.deal_number }}</a> {{ r.name }}</td><td class="small">{{ r.status }}</td><td class="num">{{ r.expected_in|money(2) }}</td><td class="num">{{ r.received|money(2) }}</td>
+<td class="num"><b>{{ r.receivable|money(2) }}</b></td><td class="small">{{ r.receivable_age_days ~ ' d' if r.receivable_age_days is not none else '—' }}</td><td class="num">{{ r.payable|money(2) }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No commission entries yet.</td></tr>{% endfor %}</table>
+<p class="small muted">As of {{ rep.as_of }}. Age counts from the date the expected commission was recorded. Reversed entries and their reversals are excluded from totals.</p>
+{% endblock %}

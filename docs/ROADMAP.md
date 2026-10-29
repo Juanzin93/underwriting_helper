@@ -50,20 +50,27 @@ the commercial module, sharing fields and extraction.
 | 4.4 | Freshness: criteria confirmed more than `UWH_CRITERIA_MAX_AGE_DAYS` (default 180) ago are flagged on matches, the lender list and program pages | `test_freshness_boundary` (180 vs 181 days) |
 | 4.5 | Lender organization page lists programs (submissions placeholder for M5); Lenders menu; API endpoints; offline OpenAPI | `test_lender_pages_and_forms`, `test_lender_api` |
 
-## Milestone 5 — structuring and brokerage (next)
+## Milestone 5 — structuring and brokerage ✅
+
+| # | Delivered | Verified by (`tests/unit/test_m5_brokerage.py`) |
+|---|---|---|
+| 5.1 | Submission package manifests (each file with SHA-256, memo version, figures from the run with its input hash, matching result and criteria version, disclosure text) stored immutably before export; ZIP export only after a named confirmation; every file re-hashed at export (changed file → refused); deterministic archives; nothing sent anywhere | `test_package_manifest_*`, `test_package_export_*` |
+| 5.2 | Submissions per lender program with history (draft → submitted → under review → term sheet → accepted / declined / withdrawn, reasons required); first submission moves a deal in STRUCTURING to LENDER_SUBMISSION (recorded) | `test_submission_lifecycle_and_deal_sync`, `test_submission_does_not_skip_deal_stages` |
+| 5.3 | Offers stored exactly as received (terms immutable); side-by-side comparison through the structuring engine (payment, year-1 debt service, DSCR, balloon, interest, fees, LTV/LTC); accepting needs a named person + confirmation and moves the deal to APPROVED; expired offers cannot be accepted | `test_offers_compare_with_structuring_engine`, `test_accepting_an_offer_*` |
+| 5.4 | Fee agreements (broker fee, lender compensation, referral split; flat / % of funded / % of broker gross), never edited (void + replace); configurable disclosure (`UWH_BROKER_DISCLOSURE`); funded amount from confirmed funding → accepted offer → requested (labelled estimate) | `test_fee_agreement_validation`, `test_fee_math_to_the_cent_*` |
+| 5.5 | Append-only commission ledger (expected in/out, received, paid out, reversals), receivable/payable per deal, aging buckets, all-deals Commissions page | `test_ledger_*`, `test_recalculate_after_reversing_expected` |
+
+## Milestone 6 — lender approval to funding on deals (next)
 
 | # | Item | Depends on | Acceptance criteria |
 |---|---|---|---|
-| 5.1 | **Submission packages.** From a saved matching, choose a program; build a package manifest listing exactly which deal documents (by SHA-256), memo version and figures would be shared; the manifest is stored before any export | M4 | Manifest immutable; export writes a local ZIP only after the user confirms the listed contents; nothing is sent anywhere by the app |
-| 5.2 | **Submission tracking.** Per program: draft → submitted (date, contact, how) → under review → term sheet / declined / withdrawn; deal status moves to LENDER_SUBMISSION when the first submission is recorded | 5.1, M2.1 | Status history per submission; deal sync recorded; reasons required for declines/withdrawals |
-| 5.3 | **Offers / term sheets.** Enter lender terms (amount, rate, index/spread, amortization, term, fees, prepayment, covenants); side-by-side comparison using the structuring engine (payment, DSCR at offered terms, total cost) | 5.2, structuring | All math Decimal and reproducible; an accepted offer becomes the deal's approved terms only with a named person's confirmation |
-| 5.4 | **Referral partners and fees.** Referral source on deals (exists), fee agreements (flat / % of funded amount / split), broker fee and lender-paid compensation schedules | M2 | Fee math tested to the cent, including splits; disclosures text configurable |
-| 5.5 | **Commission ledger.** Expected vs received commissions per funded deal; aging of unpaid commissions | 5.4, funding | Ledger entries immutable (corrections append); totals reconcile in tests |
+| 6.1 | **Lender conditions from the accepted offer.** Record the lender's commitment conditions on the deal (reuse the condition engine: requested → received → satisfied / waived by a named person), linked to deal documents | M5 | Conditions immutable history; waivers need a reason and a name; deal cannot move to CLOSING with required open conditions (override with documented reason) |
+| 6.2 | **Due-diligence tracker on deals.** Third-party items (appraisal, environmental, title, insurance) with vendor, ordered/received dates and status; reuse tasks for follow-ups | 6.1, M2 tasks | Overdue items surface on the Tasks page; every status change audited |
+| 6.3 | **Closing and funding on deals.** Closing date, final terms (from the accepted offer, differences flagged), typed funding confirmation (who, when, amount); deal → FUNDED only through this confirmation; links to the underwriting file's own funding when present | 6.1 | FUNDED requires the confirmation record; funded amount differences from the offer are flagged; commission expectations use the confirmed amount |
+| 6.4 | **Deal-level checklist view.** One page showing what blocks the next deal status (documents, conditions, due diligence, tasks) with links | 6.1–6.3 | Each blocker links to where it is resolved; hard vs soft blockers distinguished as in the file lifecycle |
 
 ## Backlog (planned, not started)
 
-* **M6 — Credit review to funding.** Map existing decisions/conditions/closing/funding onto deals; lender conditions
-  from offers; due-diligence trackers. *Accept:* APPROVED/FUNDED only via human authorization; full audit.
 * **M7 — Servicing and portfolio.** Reuse `servicing/`; portfolio by lender/referral source; covenant and
   delinquency monitoring across deals; daily accrual and payoff quotes.
 * **M8 — Opt-in integrations and direct lending.** Adapters behind `uwhelper.integrations` (each disabled by default,

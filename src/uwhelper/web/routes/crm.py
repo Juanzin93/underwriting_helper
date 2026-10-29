@@ -109,6 +109,17 @@ async def deal_detail(request: Request, deal_id: str):
         from uwhelper.lenders.matching import list_match_runs
 
         extra["match_runs"] = list_match_runs(conn, deal_id)
+        from uwhelper.brokerage import fees as F
+        from uwhelper.brokerage import packages as P
+        from uwhelper.brokerage import submissions as S
+        from uwhelper.lenders.service import list_programs
+
+        funded, basis = F.funded_amount(conn, deal_id)
+        agreements = F.list_agreements(conn, deal_id)
+        extra.update(submissions=S.list_submissions(conn, deal_id), packages=P.list_packages(conn, deal_id),
+                     programs=list_programs(conn), offers=S.list_offers(conn, deal_id), agreements=agreements,
+                     fee_preview=F.compute([a for a in agreements if not a["voided"]], funded), funded_basis=basis,
+                     ledger=F.ledger(conn, deal_id), all_orgs=crm.list_organizations(conn, limit=200))
     return render(request, "crm/deal_detail.html", deal=deal, contacts=contacts, orgs=orgs, unlinked_files=unlinked,
                   **extra,
                   product_types=PRODUCT_TYPES, contact_types=CONTACT_TYPES,

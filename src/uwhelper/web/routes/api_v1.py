@@ -15,6 +15,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from uwhelper import __version__
+from uwhelper.brokerage.fees import FeeAgreementIn, LedgerEntryIn
+from uwhelper.brokerage.submissions import DecisionIn as OfferDecisionIn
+from uwhelper.brokerage.submissions import OfferIn, SubmissionIn, SubmissionStatusIn
 from uwhelper.crm import activities as acts
 from uwhelper.crm import importer
 from uwhelper.crm import requests as docreq
@@ -508,6 +511,160 @@ def deal_match(request: Request, deal_id: str, match_id: str) -> JSONResponse:
 
     with get_db(request).session() as conn:
         return _json(matching.get_match_run(conn, deal_id, match_id))
+
+
+# ---------------------------------------------------------------------------------------- brokerage
+class _PackageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    program_id: str
+    document_ids: list[str] = Field(default_factory=list)
+    memo_id: str | None = None
+    match_run_id: str | None = None
+    include_figures: bool = True
+
+
+class _ExportIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed_by: str
+    confirm: bool = False
+
+
+@router.post("/deals/{deal_id}/packages")
+def package_build(request: Request, deal_id: str, body: _PackageIn) -> JSONResponse:
+    from uwhelper.brokerage import packages as P
+
+    with get_db(request).session() as conn:
+        pid = P.build_package(conn, request.app.state.settings, deal_id, body.program_id, body.document_ids,
+                              memo_id=body.memo_id, match_run_id=body.match_run_id, include_figures=body.include_figures)
+        return _json(P.get_package(conn, deal_id, pid), 201)
+
+
+@router.get("/deals/{deal_id}/packages/{package_id}")
+def package_get(request: Request, deal_id: str, package_id: str) -> JSONResponse:
+    from uwhelper.brokerage import packages as P
+
+    with get_db(request).session() as conn:
+        return _json(P.get_package(conn, deal_id, package_id))
+
+
+@router.post("/deals/{deal_id}/packages/{package_id}/exports")
+def package_export(request: Request, deal_id: str, package_id: str, body: _ExportIn) -> JSONResponse:
+    from uwhelper.brokerage import packages as P
+
+    with get_db(request).session() as conn:
+        res = P.export_package(conn, request.app.state.settings, deal_id, package_id, confirmed_by=body.confirmed_by,
+                               confirm=body.confirm)
+        return _json({k: v for k, v in res.items() if k != "path"}, 201)
+
+
+@router.get("/deals/{deal_id}/submissions")
+def submissions_list(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.brokerage import submissions as S
+
+    with get_db(request).session() as conn:
+        crm.get_deal(conn, deal_id)
+        return _json({"items": S.list_submissions(conn, deal_id)})
+
+
+@router.post("/deals/{deal_id}/submissions")
+def submission_create(request: Request, deal_id: str, body: SubmissionIn) -> JSONResponse:
+    from uwhelper.brokerage import submissions as S
+
+    with get_db(request).session() as conn:
+        return _json(S.get_submission(conn, deal_id, S.create_submission(conn, deal_id, body)), 201)
+
+
+@router.get("/deals/{deal_id}/submissions/{submission_id}")
+def submission_get(request: Request, deal_id: str, submission_id: str) -> JSONResponse:
+    from uwhelper.brokerage import submissions as S
+
+    with get_db(request).session() as conn:
+        return _json(S.get_submission(conn, deal_id, submission_id))
+
+
+@router.post("/deals/{deal_id}/submissions/{submission_id}/status")
+def submission_status(request: Request, deal_id: str, submission_id: str, body: SubmissionStatusIn) -> JSONResponse:
+    from uwhelper.brokerage import submissions as S
+
+    with get_db(request).session() as conn:
+        return _json(S.transition(conn, deal_id, submission_id, body))
+
+
+@router.post("/deals/{deal_id}/submissions/{submission_id}/offers")
+def offer_create(request: Request, deal_id: str, submission_id: str, body: OfferIn) -> JSONResponse:
+    from uwhelper.brokerage import submissions as S
+
+    with get_db(request).session() as conn:
+        return _json(S.get_offer(conn, deal_id, S.add_offer(conn, deal_id, submission_id, body)), 201)
+
+
+@router.get("/deals/{deal_id}/offers")
+def offers_compare(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.brokerage import submissions as S
+
+    with get_db(request).session() as conn:
+        return _json(S.compare_offers(conn, deal_id))
+
+
+@router.post("/deals/{deal_id}/offers/{offer_id}/{decision}")
+def offer_decide(request: Request, deal_id: str, offer_id: str, decision: Literal["accept", "decline"],
+                 body: OfferDecisionIn) -> JSONResponse:
+    from uwhelper.brokerage import submissions as S
+
+    with get_db(request).session() as conn:
+        if decision == "accept":
+            res = S.accept_offer(conn, deal_id, offer_id, body)
+        else:
+            S.decline_offer(conn, deal_id, offer_id, body)
+            res = {}
+        return _json({"offer": S.get_offer(conn, deal_id, offer_id), **res})
+
+
+@router.get("/deals/{deal_id}/fees")
+def fees_get(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.brokerage import fees as F
+
+    with get_db(request).session() as conn:
+        funded, basis = F.funded_amount(conn, deal_id)
+        agreements = F.list_agreements(conn, deal_id)
+        lg = F.ledger(conn, deal_id)
+        lg["reversed_ids"] = sorted(lg["reversed_ids"])
+        return _json({"agreements": agreements, "funded_amount": funded, "funded_basis": basis,
+                      "calculation": F.compute([a for a in agreements if not a["voided"]], funded), "ledger": lg})
+
+
+@router.post("/deals/{deal_id}/fees/agreements")
+def fee_agreement_create(request: Request, deal_id: str, body: FeeAgreementIn) -> JSONResponse:
+    from uwhelper.brokerage import fees as F
+
+    with get_db(request).session() as conn:
+        return _json({"id": F.add_agreement(conn, deal_id, body)}, 201)
+
+
+@router.post("/deals/{deal_id}/fees/expected")
+def fee_expected(request: Request, deal_id: str) -> JSONResponse:
+    from datetime import date as _date
+
+    from uwhelper.brokerage import fees as F
+
+    with get_db(request).session() as conn:
+        return _json(F.record_expected(conn, deal_id, _date.today()), 201)
+
+
+@router.post("/deals/{deal_id}/fees/entries")
+def fee_entry(request: Request, deal_id: str, body: LedgerEntryIn) -> JSONResponse:
+    from uwhelper.brokerage import fees as F
+
+    with get_db(request).session() as conn:
+        return _json({"id": F.record_entry(conn, deal_id, body)}, 201)
+
+
+@router.get("/commissions")
+def commissions(request: Request) -> JSONResponse:
+    from uwhelper.brokerage import fees as F
+
+    with get_db(request).session() as conn:
+        return _json(F.commissions_report(conn))
 
 
 @router.get("/pipeline")

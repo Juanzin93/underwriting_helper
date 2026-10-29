@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Package · {{ deal.deal_number }}{% endblock %}
+{% block content %}
+<p><a href="/deals/{{ deal.id }}#submissions">← {{ deal.deal_number }} · {{ deal.name }}</a></p>
+<h1>Submission package v{{ m.version }} — {{ m.lender }} · {{ m.program }}</h1>
+<p class="small">Built {{ m.created_at[:16].replace('T',' ') }} UTC by {{ m.created_by }} · manifest SHA-256 <span class="mono">{{ pkg.manifest_sha256[:16] }}</span>{% if not pkg.intact %} <span class="badge rejected">ALTERED</span>{% endif %}{% if m.criteria_version %} · lender criteria v{{ m.criteria_version }}{% endif %}</p>
+<div class="info-box">This is exactly what an export would contain. The app does not send it anywhere; delivering it to the lender is your own action.</div>
+<h2>Files</h2>
+<table><tr><th>File</th><th>Type</th><th class="num">Size</th><th>SHA-256</th></tr>
+{% for d in m.documents %}<tr><td>{{ d.filename }}</td><td class="small">{{ d.doc_type }}</td><td class="num small">{{ d.size_bytes }}</td><td class="mono small">{{ d.sha256[:16] }}…</td></tr>{% endfor %}
+{% if m.memo %}<tr><td>Deal memo v{{ m.memo.version }} (HTML)</td><td class="small">memo</td><td></td><td class="mono small">{{ m.memo.html_sha256[:16] }}…</td></tr>{% endif %}
+<tr><td>manifest.json, README.txt, DISCLOSURE.txt</td><td class="small">generated</td><td></td><td></td></tr></table>
+<h2>Figures quoted</h2>
+{% if m.figures %}<p class="small">From screening run #{{ m.figures.run_number }} ({{ m.figures.run_created_at[:10] }}){% if not m.figures.run_current %} <span class="badge unverified">run out of date</span>{% endif %}</p>
+<table>{% for x in m.figures.metrics %}<tr><td>{{ x.label }}</td><td class="num">{{ x.value|fmtval(x.unit) }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">No figures included.</p>{% endif %}
+{% if m.match %}<p class="small">Matching of {{ m.match.created_at[:10] }}: {{ (m.match.fit or 'program not in that matching').replace('_',' ') }}{% if m.match.counts %} (PASS {{ m.match.counts.PASS }}, FAIL {{ m.match.counts.FAIL }}, UNKNOWN {{ m.match.counts.UNKNOWN }}){% endif %}</p>{% endif %}
+<h2>Disclosure</h2><p class="small">{{ m.disclosure }}</p>
+<h2>Export</h2>
+{% for e in pkg.exports %}<p class="small"><a href="/deals/{{ deal.id }}/packages/{{ pkg.id }}/exports/{{ e.id }}">{{ e.file_name }}</a> · {{ e.exported_at[:16].replace('T',' ') }} · confirmed by {{ e.confirmed_by }} · <span class="mono">{{ e.zip_sha256[:12] }}</span></p>{% endfor %}
+<form method="post" action="/deals/{{ deal.id }}/packages/{{ pkg.id }}/export" class="panel">{{ csrf() }}
+<label class="check"><input type="checkbox" name="confirm" required> I reviewed the files and figures listed above and they may be shared with {{ m.lender }}.</label>
+<div class="row"><div><label>Your name *</label><input type="text" name="confirmed_by" required minlength="2"></div></div>
+<p><button>Export ZIP to this PC</button></p>
+<p class="small muted">Each document is re-checked against its SHA-256 first; a changed file stops the export.</p></form>
+{% endblock %}
