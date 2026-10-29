@@ -160,3 +160,19 @@ Known limitations added in M6:
 * Deal conditions and due diligence are separate from the underwriting file's own policy conditions (the file keeps
   its lifecycle); a deal with a linked file shows both in their own places.
 * Funding confirmation records what happened; the app moves no money and drafts no loan documents.
+
+## Platform Milestone 7 — servicing and portfolio across deals ✅
+
+Latest test run: **349 passed, 2 skipped** (`python -m pytest -q`; also with `-W error::ResourceWarning`). New tests:
+`tests/unit/test_m7_portfolio.py` (7). Details per item: [ROADMAP.md](ROADMAP.md).
+
+Also verified by hand: a database created by the Milestone 6 release upgraded to schema 13 (integrity ok, audit chain
+intact, all 5 runs reproducing, watchlist built from the existing serviced loans); portfolio, watchlist, tasks and
+servicing pages checked in Chromium at desktop and 390 px width.
+
+Known limitations added in M7:
+* Reminders are created when a deal is funded and whenever the Tasks page or watchlist is opened (there is no
+  background scheduler; the app does nothing while closed).
+* Brokered-loan dates assume calendar-month terms from the funding date; lender documents may define dates differently.
+* Payoff quotes use simple daily interest at the current schedule rate; no prepayment penalties, escrow or
+  late-fee accrual are included.

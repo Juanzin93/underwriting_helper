@@ -2,6 +2,7 @@
 {% block title %}Portfolio{% endblock %}
 {% block content %}
 <h1>Portfolio overview <span class="small muted">as of {{ p.as_of }}</span></h1>
+<p class="actions"><a class="btn secondary small" href="/portfolio/deals">Funded deals by lender / referral / product / month</a> <a class="btn secondary small" href="/watchlist">Watchlist (all loans)</a> <a class="btn secondary small" href="/commissions">Commissions</a></p>
 <div class="kpi">
 <div><b>{{ p.totals.accounts }}</b><span>active serviced loans</span></div>
 <div><b>{{ p.totals.outstanding|money }}</b><span>outstanding principal (funded {{ p.totals.funded|money }})</span></div>

@@ -746,6 +746,85 @@ def deal_readiness(request: Request, deal_id: str) -> JSONResponse:
         return _json({"items": readiness(conn, deal_id)})
 
 
+# ---------------------------------------------------------------------------------------- portfolio
+class _PayoffIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    good_through: str
+    day_count: Literal["actual/365", "actual/360"] = "actual/365"
+
+
+@router.get("/portfolio/deals")
+def portfolio_deals(request: Request, by: str = "lender", deal_type: str | None = None,
+                    date_from: str | None = Query(None, alias="from"), date_to: str | None = Query(None, alias="to")) -> JSONResponse:
+    from datetime import date as _d
+
+    from uwhelper.portfolio import reports as REP
+
+    try:
+        f, t = (_d.fromisoformat(date_from) if date_from else None), (_d.fromisoformat(date_to) if date_to else None)
+    except ValueError:
+        raise ValidationFailure("Dates must be YYYY-MM-DD.") from None
+    with get_db(request).session() as conn:
+        rows = REP.funded_deals(conn, date_from=f, date_to=t, deal_type=deal_type)
+        return _json({"by": by if by in REP.GROUPS else "lender", "groups": REP.grouped(rows, by),
+                      "totals": REP.totals(rows), "deals": rows})
+
+
+@router.get("/watchlist")
+def watchlist(request: Request) -> JSONResponse:
+    from uwhelper.portfolio import monitoring as MON
+
+    with get_db(request).session() as conn:
+        return _json({"items": MON.watchlist(conn)})
+
+
+@router.post("/reminders/sync")
+def reminders_sync(request: Request) -> JSONResponse:
+    from uwhelper.portfolio import monitoring as MON
+
+    with get_db(request).session() as conn:
+        return _json({"created": MON.sync_all_reminders(conn)})
+
+
+@router.get("/deals/{deal_id}/key-dates")
+def deal_key_dates(request: Request, deal_id: str) -> JSONResponse:
+    from uwhelper.portfolio import monitoring as MON
+
+    with get_db(request).session() as conn:
+        crm.get_deal(conn, deal_id)
+        return _json({"items": [k | {"date": k["date"].isoformat()} for k in MON.key_dates(conn, deal_id)]})
+
+
+@router.post("/underwriting-files/{case_id}/payoff-quotes")
+def payoff_create(request: Request, case_id: str, body: _PayoffIn) -> JSONResponse:
+    from datetime import date as _d
+
+    from uwhelper.portfolio import payoff as PO
+    from uwhelper.servicing.ledger import account_for_case
+
+    try:
+        gt = _d.fromisoformat(body.good_through)
+    except ValueError:
+        raise ValidationFailure("good_through must be YYYY-MM-DD.") from None
+    with get_db(request).session() as conn:
+        acct = account_for_case(conn, case_id)
+        if not acct:
+            raise ValidationFailure("This file has no servicing account.")
+        return _json(PO.get_quote(conn, acct["id"], PO.create_quote(conn, acct["id"], gt, body.day_count)), 201)
+
+
+@router.get("/underwriting-files/{case_id}/payoff-quotes/{quote_id}/verify")
+def payoff_verify(request: Request, case_id: str, quote_id: str) -> JSONResponse:
+    from uwhelper.portfolio import payoff as PO
+    from uwhelper.servicing.ledger import account_for_case
+
+    with get_db(request).session() as conn:
+        acct = account_for_case(conn, case_id)
+        if not acct:
+            raise ValidationFailure("This file has no servicing account.")
+        return _json(PO.verify_quote(conn, acct["id"], quote_id))
+
+
 @router.get("/pipeline")
 def pipeline(request: Request) -> JSONResponse:
     with get_db(request).session() as conn:

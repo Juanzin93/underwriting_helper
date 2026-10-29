@@ -73,20 +73,27 @@ the commercial module, sharing fields and extraction.
 `PUT …/closing/record` and `POST …/funding`. Moving a deal to DUE_DILIGENCE or CLOSING with open items needs
 `override_reason` (≥ 20 characters).
 
-## Milestone 7 — servicing and portfolio across deals (next)
+## Milestone 7 — servicing and portfolio across deals ✅
+
+| # | Delivered | Verified by (`tests/unit/test_m7_portfolio.py`) |
+|---|---|---|
+| 7.1 | Key dates for brokered loans (interest-only end, rate resets from the closing record's reset frequency, maturity, balloon with its amount from the structuring engine); reminder tasks ahead of each date (maturity 180/60 days, balloon 365/180/90, IO end 60, reset 30), created exactly once per deal/kind/date/lead — at funding and whenever the Tasks page or watchlist is opened | `test_key_dates_hand_worked`, `test_reminders_created_once` |
+| 7.2 | Funded-deals portfolio grouped by lender, referral source, product, deal type or funding month, with date/type filters and a CSV download of exactly the grouped table (spreadsheet-formula cells escaped) | `test_portfolio_grouping_reconciles_and_csv_is_safe` |
+| 7.3 | One watchlist: in-app servicing alerts (mapped to deals) plus brokered-loan dates inside their warning windows; each loan once; serviced loans get no duplicate brokered reminders | `test_watchlist_combines_without_duplicates` |
+| 7.4 | Payoff quotes (actual/365 or actual/360, per diem, paid-through date, good-through within 60 days), stored with all inputs, re-checkable, flagging later ledger changes | `test_payoff_quote_hand_worked_and_rechecked` |
+
+## Milestone 8 — accounts, opt-in integrations and direct lending (next)
+
+Order matters: authentication first (before more people or capital are involved), then a licensing decision, then
+optional integrations, then direct lending.
 
 | # | Item | Depends on | Acceptance criteria |
 |---|---|---|---|
-| 7.1 | **Brokered-loan monitoring.** For funded deals without an in-app servicing account: maturity, rate reset and balloon dates from the funding and accepted offer; reminders (tasks) ahead of each date | M6 | Dates computed from stored terms (tested); reminders created once, never duplicated |
-| 7.2 | **Portfolio views.** Funded volume, count and commissions by lender, referral source, product and month; filters; CSV export of the table (local file) | M5, M6 | Totals reconcile to the deal and ledger records in tests; export contains only the visible columns |
-| 7.3 | **Covenant and delinquency monitoring across files** using the existing `servicing/` data, surfaced per deal and on a portfolio watchlist | existing servicing | Watchlist matches the per-file alerts; no duplicate alerts |
-| 7.4 | **Daily accrual and payoff quotes** for in-app serviced loans (actual/365 and actual/360 options, per-diem, good-through date) | existing servicing | Hand-worked examples to the cent; quotes stored with their inputs and re-checkable |
-
-## Backlog (planned, not started)
-
-* **M8 — Opt-in integrations and direct lending.** Adapters behind `uwhelper.integrations` (each disabled by default,
-  separately enabled, confirmation listing shared data); direct-lending module (own capital, funding sources,
-  approval authority matrix). Requires authentication and a licensing review first.
+| 8.1 | **Local user accounts.** Sign-in (Argon2id/scrypt password hashes, local only), roles (viewer, analyst, broker, credit approver, admin), session timeout; actor on every record = the signed-in user; "authorized by" for approvals must be a user holding the right role | M2 actor | Every write route requires a session; role checks tested per route; first-run admin setup; existing data attributed to a migration user |
+| 8.2 | **Licensing decision for PDF handling.** Keep PyMuPDF (AGPL: source must be offered to anyone the app is distributed to), buy a commercial licence, or move to pypdfium2 behind `documents/pdf.py` | — | Decision recorded in LICENSING.md; if replaced, all document tests pass with the new backend |
+| 8.3 | **Local-only exports that look like integrations** (no network): calendar (.ics) for reminders, email drafts (.eml) for document requests and submissions — the user sends them from their own mail client | 8.1 | Files written locally; nothing transmitted; content limited to what the user selects |
+| 8.4 | **First network adapter (opt-in).** Behind `uwhelper.integrations`: disabled by default, enabled only with the master switch + its name, every call preceded by a confirmation listing exactly what will be sent; adapter isolated and mockable | 8.1 | Disabled state tested; confirmation record stored; no adapter code runs while disabled |
+| 8.5 | **Direct lending.** Funding sources and capital available, approval authority matrix (amount limits per role/person), own loans flow into the existing file lifecycle and servicing | 8.1 | An approval above a person's limit is refused; capital cannot go negative; full audit |
 
 ## Status lifecycle (target)
 

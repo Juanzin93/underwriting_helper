@@ -49,6 +49,12 @@ async def servicing_page(request: Request, case_id: str):
             cf = conn.execute("SELECT value FROM run_metrics WHERE run_id=? AND metric_key='cfads' AND status='computed'",
                               (run["id"],)).fetchone() if run else None
             ctx["latest_cfads"] = cf["value"] if cf else None
+            from uwhelper.portfolio import payoff as PO
+
+            ctx["quotes"] = PO.list_quotes(conn, acct["id"])
+            qid = request.query_params.get("quote")
+            ctx["quote_check"] = PO.verify_quote(conn, acct["id"], qid) if qid else None
+            ctx["quote_checked_id"] = qid
             ctx["what_if"] = None
             if request.query_params.get("wi"):
                 q = request.query_params

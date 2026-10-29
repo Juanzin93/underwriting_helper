@@ -108,6 +108,19 @@ Before: {{ mm.before }}<br>After: {{ mm.after }}</div>{% else %}<p class="muted"
 <p class="small muted">The account must be current through the effective date (arrears are not capitalized in this version).</p>
 <p><button class="small">Record modification</button></p></form></details>
 
+<h2 id="payoff">Payoff quotes</h2>
+<table><tr><th>Quoted</th><th>Good through</th><th>Day count</th><th class="num">Principal</th><th class="num">Interest (days × per diem)</th><th class="num">Fees</th><th class="num">Payoff</th><th></th></tr>
+{% for q in quotes %}<tr><td class="small">{{ q.quote_date }}<br><span class="muted">{{ q.created_by }}</span></td><td>{{ q.good_through }}</td><td class="small">{{ q.day_count }}</td>
+<td class="num">{{ q.principal|money(2) }}</td><td class="num">{{ q.accrued_interest|money(2) }}<br><span class="small muted">{{ q.days }} d × {{ q.per_diem|money(2) }} from {{ q.paid_through }}</span></td>
+<td class="num">{{ q.unpaid_fees|money(2) }}</td><td class="num"><b>{{ q.total|money(2) }}</b></td>
+<td class="small">{% if quote_checked_id == q.id and quote_check %}{% if quote_check.reproduced and quote_check.inputs_intact %}<span class="badge verified">re-checked</span>{% else %}<span class="badge rejected">differs</span>{% endif %}{% if quote_check.ledger_changed %}<br><span class="badge unverified">ledger changed: {{ quote_check.ledger_changed|join(', ') }}</span>{% endif %}{% else %}<a href="?quote={{ q.id }}#payoff">Re-check</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No quotes yet.</td></tr>{% endfor %}</table>
+{% if account.status == 'ACTIVE' %}<form method="post" action="/cases/{{ case.id }}/servicing/payoff/quote" class="actions">{{ csrf() }}
+<label>Good through <input type="date" name="good_through" required></label>
+<select name="day_count" aria-label="Day count"><option value="actual/365">actual/365</option><option value="actual/360">actual/360</option></select>
+<button class="small">Quote payoff</button></form>{% endif %}
+<p class="small muted">Payoff = outstanding principal + simple interest from the interest paid-through date (last installment whose interest is fully paid) to the good-through date at the current schedule rate + unpaid fees. A planning figure, not a lender payoff letter.</p>
+
 <h2>What-if (planning only)</h2>
 <form method="get" class="panel"><input type="hidden" name="wi" value="1"><div class="row">
 <div><label>Rate (%)</label><input type="text" name="wi_rate" placeholder="current"></div><div><label>Extra principal payment</label><input type="text" name="wi_extra" placeholder="0"></div>

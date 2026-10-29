@@ -67,7 +67,8 @@
 <div><label>Final amount ($)</label><input type="text" name="final_amount" value="{{ closing.final_amount if closing and closing.final_amount else (offer.amount if offer else '') }}"></div>
 <div><label>Final rate (%)</label><input type="text" name="final_annual_rate" value="{{ (closing.final_annual_rate|float * 100)|round(4) if closing and closing.final_annual_rate else ((offer.annual_rate|float * 100)|round(4) if offer else '') }}"></div>
 <div><label>Term (months)</label><input type="number" name="final_term_months" value="{{ closing.final_term_months if closing and closing.final_term_months else (offer.term_months if offer else '') }}"></div>
-<div><label>Amortization (months)</label><input type="number" name="final_amortization_months" value="{{ closing.final_amortization_months if closing and closing.final_amortization_months else (offer.amortization_months if offer else '') }}"></div></div>
+<div><label>Amortization (months)</label><input type="number" name="final_amortization_months" value="{{ closing.final_amortization_months if closing and closing.final_amortization_months else (offer.amortization_months if offer else '') }}"></div>
+<div><label>Rate resets every (months, variable only)</label><input type="number" name="rate_reset_months" min="1" max="120" value="{{ closing.rate_reset_months if closing and closing.rate_reset_months else '' }}"></div></div>
 <label>Notes</label><textarea name="notes">{{ closing.notes if closing and closing.notes else '' }}</textarea>
 {% if not funding and deal.status in ('APPROVED','DUE_DILIGENCE','CLOSING') %}<p><button class="small">Save closing record</button></p>{% endif %}</form>
 {% for d in differences %}<p class="warning-box">Final {{ d.item }} differs from the accepted offer: {{ d.offer }} → {{ d.final }}.</p>{% endfor %}

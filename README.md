@@ -34,6 +34,8 @@ structuring, due diligence, closing, funding and servicing — entirely on your 
   append-only **commission ledger** with aging;
 * takes a deal from **lender approval to funding**: lender conditions, a due-diligence tracker, a closing record
   checked against the accepted offer, gates with documented overrides, and a typed funding confirmation;
+* monitors funded loans: key-date reminders for brokered loans, one **watchlist** across all loans, a funded-deals
+  portfolio by lender / referral source / product / month (CSV download), and **payoff quotes** for serviced loans;
 * offers a local JSON API (`/api/v1`, schema at `/api/v1/openapi.json`) and a `/health` endpoint.
 
 Step-by-step Windows install, configuration, backup and restore: **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**.
@@ -109,7 +111,7 @@ record or import payments, covenants, alerts) → **Portfolio** (top menu).
 ## 3. Tests
 
 ```powershell
-scripts\run_tests.ps1                # 344 tests (2 need Ollama); no Ollama or internet needed
+scripts\run_tests.ps1                # 351 tests (2 need Ollama); no Ollama or internet needed
 scripts\run_tests.ps1 -Ollama        # also runs live tests against your local model
 # or: .\.venv\Scripts\python -m pytest -q
 ```
@@ -169,6 +171,7 @@ src/uwhelper/
   lenders/             lender programs, versioned criteria, explainable matching, catalog import
   brokerage/           submission packages, submissions and offers, fee agreements, commission ledger
   origination/         deal conditions, due diligence, closing record, funding confirmation, status gates
+  portfolio/           key dates and reminders, watchlist, portfolio reports, payoff quotes
   integrations/        disabled-by-default registry for future opt-in adapters (none implemented)
   db/                  SQLite connection, transactions, checksum-verified migrations (migrations/*.sql)
   domain/              Decimal money parsing/rounding, enums, Pydantic input models
@@ -196,7 +199,7 @@ periods, verified-only) → metrics (Python) → policy engine → immutable run
 closing → human-confirmed funding → servicing.**
 
 Upgrading an existing installation: pull the new code, run `pip install -e . --no-deps`, back up, then start the app —
-migrations 0002–0012 run automatically, existing cases start in INTAKE, keep working without a deal, and their borrowers are linked to organizations (nothing is deleted).
+migrations 0002–0013 run automatically, existing cases start in INTAKE, keep working without a deal, and their borrowers are linked to organizations (nothing is deleted).
 
 More detail: [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md), [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE_ASSESSMENT.md](docs/ARCHITECTURE_ASSESSMENT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with ER diagram), [docs/METRICS.md](docs/METRICS.md),
 [docs/POLICIES.md](docs/POLICIES.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/OPERATIONS.md](docs/OPERATIONS.md),

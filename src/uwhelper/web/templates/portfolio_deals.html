@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Funded deals{% endblock %}
+{% block content %}
+<p><a href="/portfolio">← Portfolio</a></p>
+<h1>Funded deals</h1>
+<form method="get" class="actions panel">
+<label>Group by <select name="by">{% for k, v in group_names.items() %}<option value="{{ k }}" {% if k == by %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+<label>Type <select name="deal_type"><option value="">all</option><option value="small_business" {% if deal_type == 'small_business' %}selected{% endif %}>small business</option><option value="cre" {% if deal_type == 'cre' %}selected{% endif %}>CRE</option></select></label>
+<label>Funded from <input type="date" name="from" value="{{ date_from }}"></label><label>to <input type="date" name="to" value="{{ date_to }}"></label>
+<button class="small secondary">Show</button>
+<a class="btn secondary small" href="?{{ query }}{{ '&' if query else '' }}format=csv">Download this table (CSV)</a></form>
+<div class="kpi"><div><b>{{ totals.deals }}</b><span>funded deals</span></div><div><b>{{ totals.funded|money }}</b><span>funded volume</span></div>
+<div><b>{{ totals.commission_expected|money(2) }}</b><span>commission expected</span></div><div><b>{{ totals.commission_received|money(2) }}</b><span>received</span></div></div>
+<table><tr><th>{{ group_names[by] }}</th><th class="num">Deals</th><th class="num">Funded</th><th class="num">Average</th><th class="num">Commission expected</th><th class="num">Received</th><th class="num">Paid to partners</th></tr>
+{% for g in groups %}<tr><td>{{ g.group }}{% if g.estimates %} <span class="badge unverified">{{ g.estimates }} estimated</span>{% endif %}</td><td class="num">{{ g.deals }}</td><td class="num">{{ g.funded|money }}</td><td class="num">{{ g.average|money }}</td>
+<td class="num">{{ g.commission_expected|money(2) }}</td><td class="num">{{ g.commission_received|money(2) }}</td><td class="num">{{ g.paid_to_partners|money(2) }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No funded deals in this selection.</td></tr>{% endfor %}</table>
+<h2>Deals</h2>
+<table><tr><th>Deal</th><th>Funded</th><th>Lender</th><th>Referral</th><th>Product</th><th class="num">Amount</th></tr>
+{% for r in rows %}<tr><td><a href="/deals/{{ r.deal_id }}">{{ r.deal_number }}</a> {{ r.name }}</td><td class="small">{{ r.funding_date }}</td><td class="small">{{ r.lender }}</td><td class="small">{{ r.referral_source }}</td><td class="small">{{ r.product.replace('_',' ') }}</td>
+<td class="num">{{ r.funded_amount|money }}{% if r.estimate %} <span class="badge unverified">estimate</span>{% endif %}</td></tr>{% endfor %}</table>
+<p class="small muted">Amounts come from funding confirmations (or the underwriting file's funding); "estimate" means only the requested amount is known. The CSV contains exactly the grouped table above and is saved to your PC only.</p>
+{% endblock %}

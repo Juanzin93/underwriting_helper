@@ -52,10 +52,11 @@ class ClosingIn(BaseModel):
     final_annual_rate: Decimal | None = None
     final_term_months: int | None = Field(default=None, ge=1, le=600)
     final_amortization_months: int | None = Field(default=None, ge=1, le=600)
+    rate_reset_months: int | None = Field(default=None, ge=1, le=120)
     notes: str | None = Field(default=None, max_length=2000)
 
-    @field_validator("closing_date", "final_amount", "final_term_months", "final_amortization_months", "notes",
-                     mode="before")
+    @field_validator("closing_date", "final_amount", "final_term_months", "final_amortization_months",
+                     "rate_reset_months", "notes", mode="before")
     @classmethod
     def _blank(cls, v: object) -> object:
         if isinstance(v, str):
@@ -114,18 +115,20 @@ def save_closing(conn: sqlite3.Connection, deal_id: str, c: ClosingIn) -> None:
     if get_funding(conn, deal_id):
         raise ValidationFailure("The closing record is locked after funding.")
     vals = (c.closing_date.isoformat() if c.closing_date else None, dstr(c.final_amount), dstr(c.final_annual_rate),
-            c.final_term_months, c.final_amortization_months, c.notes, current_actor(), utcnow())
+            c.final_term_months, c.final_amortization_months, c.rate_reset_months, c.notes, current_actor(), utcnow())
     with Database.transaction(conn):
         conn.execute("""INSERT INTO deal_closings(deal_id, closing_date, final_amount, final_annual_rate, final_term_months,
-                            final_amortization_months, notes, updated_by, updated_at) VALUES (?,?,?,?,?,?,?,?,?)
+                            final_amortization_months, rate_reset_months, notes, updated_by, updated_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)
                         ON CONFLICT(deal_id) DO UPDATE SET closing_date=excluded.closing_date,
                             final_amount=excluded.final_amount, final_annual_rate=excluded.final_annual_rate,
                             final_term_months=excluded.final_term_months,
-                            final_amortization_months=excluded.final_amortization_months, notes=excluded.notes,
+                            final_amortization_months=excluded.final_amortization_months,
+                            rate_reset_months=excluded.rate_reset_months, notes=excluded.notes,
                             updated_by=excluded.updated_by, updated_at=excluded.updated_at""", (deal_id, *vals))
         audit.record(conn, "deal_closing_saved", "deal", deal_id, deal["loan_case_id"],
                      {"closing_date": vals[0], "final_amount": vals[1], "final_annual_rate": vals[2],
-                      "final_term_months": vals[3], "final_amortization_months": vals[4]})
+                      "final_term_months": vals[3], "final_amortization_months": vals[4], "rate_reset_months": vals[5]})
 
 
 def term_differences(offer: dict[str, Any] | None, closing: dict[str, Any] | None,
@@ -246,6 +249,9 @@ def confirm_funding(conn: sqlite3.Connection, deal_id: str, f: FundingConfirmIn)
                       "confirmed_by": f.confirmed_by, "differences": diffs,
                       "overridden": [x.code for x in overridden]})
         crm.write_transition(conn, deal, "FUNDED", reason[:2000], f.confirmed_by)
+        from uwhelper.portfolio.monitoring import sync_reminders
+
+        sync_reminders(conn, deal_id)
     return fid
 
 

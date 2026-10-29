@@ -112,6 +112,9 @@ async def deal_detail(request: Request, deal_id: str):
         from uwhelper.origination.closing import readiness
 
         extra["readiness"] = readiness(conn, deal_id)
+        from uwhelper.portfolio.monitoring import key_dates
+
+        extra["key_dates"] = key_dates(conn, deal_id)
         from uwhelper.brokerage import fees as F
         from uwhelper.brokerage import packages as P
         from uwhelper.brokerage import submissions as S
@@ -250,7 +253,9 @@ async def tasks_page(request: Request):
         tasks = task_svc.list_tasks(conn, view=view, assignee=assignee, limit=300)
         counts = task_svc.task_counts(conn)
         from uwhelper.origination.conditions import overdue_items
+        from uwhelper.portfolio.monitoring import sync_all_reminders
 
+        sync_all_reminders(conn)  # cheap and idempotent: brings loan-date reminders up to date
         overdue = overdue_items(conn)
         deals = crm.list_deals(conn, limit=200)
     return render(request, "crm/tasks.html", tasks=tasks, counts=counts, view=view, views=task_svc.VIEWS, deals=deals,

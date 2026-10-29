@@ -64,7 +64,7 @@ Target boundaries are **packages inside one process**, not services.
 | brokerage | `brokerage/` (packages, submissions & offers, fees & commission ledger); deal pipeline in `crm/` | M5 |
 | servicing | `servicing/` | |
 | direct_lending | — | M8 |
-| reporting | `reports/` | |
+| reporting | `reports/`; `portfolio/` (monitoring, portfolio reports, payoff quotes) | M7 |
 | integrations | `integrations/` | Registry + disabled-by-default gate; no providers |
 | ai | `llm/` | Local Ollama only |
 | web | `web/` (HTML routes + `/api/v1`) | |

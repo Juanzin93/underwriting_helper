@@ -51,3 +51,11 @@ acknowledged with a note. No model predictions are used.
 ## What-if
 Re-amortizes the current outstanding balance over the remaining payments under a different rate or after an extra
 payment, with DSCR from a CFADS you supply (defaults to the latest verified run). Planning only; nothing is saved.
+
+## Payoff quotes (Milestone 7)
+Servicing page → **Payoff quotes**. Payoff = outstanding principal (from recorded payments) + simple interest from the
+*interest paid-through date* (due date of the last installment whose scheduled interest is fully paid, in order; the
+funding date if none) to the *good-through date*, at the current schedule rate, using actual/365 or actual/360
+(per diem = principal × rate ÷ 365 or 360) + unpaid fees. Each line is rounded half-up to cents once. The good-through
+date must be within 60 days. Quotes are stored with every input and can be re-checked; the check also reports
+whether the ledger changed since (e.g. a back-dated payment). A planning figure, not a lender payoff letter.
