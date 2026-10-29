@@ -15,7 +15,7 @@
 <div><label for="password">PDF password (optional, never stored)</label><input type="password" id="password" name="password" autocomplete="off"></div>
 </div>
 <p><button type="submit">Upload &amp; process locally</button></p>
-<p class="small muted">Each file is hashed (SHA-256). An identical file is never stored twice. Text is read with PyMuPDF; pages without a text layer are OCR'd with local Tesseract.</p>
+<p class="small muted">Each file is hashed (SHA-256). An identical file is never stored twice. Text is read with PDFium (pypdfium2); pages without a text layer are OCR'd with local Tesseract.</p>
 </form>
 </div>
 <div class="panel">

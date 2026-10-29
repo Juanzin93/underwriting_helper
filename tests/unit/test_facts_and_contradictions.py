@@ -3,7 +3,11 @@ from decimal import Decimal as D
 import pytest
 
 from tests.conftest import add_verified_financials, make_case
-from uwhelper.analysis.resolver import build_inputs, find_contradictions, missing_checklist
+from uwhelper.analysis.resolver import (
+    build_inputs,
+    find_contradictions,
+    missing_checklist,
+)
 from uwhelper.domain.models import CorrectionIn, FactIn, PartyIn
 from uwhelper.repo import cases, facts
 from uwhelper.repo.cases import ValidationFailure

@@ -1,4 +1,3 @@
-import json
 import sqlite3
 
 import pytest
@@ -7,8 +6,14 @@ from tests.lifecycle_helpers import advance, clean_sample
 from uwhelper.analysis.underwriting import run_underwriting
 from uwhelper.db.connection import Database
 from uwhelper.db.migrate import apply_migrations
-from uwhelper.reports.memo import build_memo_context, generate_memo, list_memos, render_memo, verify_reproduction
 from uwhelper.repo.audit import backfill_chain, verify_chain
+from uwhelper.reports.memo import (
+    build_memo_context,
+    generate_memo,
+    list_memos,
+    render_memo,
+    verify_reproduction,
+)
 from uwhelper.sample_data import load_sample_case
 
 

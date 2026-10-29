@@ -2,11 +2,16 @@ import sqlite3
 
 import pytest
 
-from uwhelper.db.connection import Database
-from uwhelper.db.migrate import MigrationError, apply_migrations, current_version, split_sql
-from uwhelper.domain.models import CorrectionIn, FactIn
-from uwhelper.repo import audit, facts
 from tests.conftest import make_case
+from uwhelper.db.connection import Database
+from uwhelper.db.migrate import (
+    MigrationError,
+    apply_migrations,
+    current_version,
+    split_sql,
+)
+from uwhelper.domain.models import FactIn
+from uwhelper.repo import audit, facts
 
 
 def test_migrations_idempotent_and_versioned(conn):

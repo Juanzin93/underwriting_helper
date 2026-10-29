@@ -2,7 +2,15 @@ from decimal import Decimal as D
 
 import pytest
 
-from uwhelper.domain.money import InvalidAmount, apply_scale, fmt_money, fmt_pct, fmt_ratio, round_to, to_decimal
+from uwhelper.domain.money import (
+    InvalidAmount,
+    apply_scale,
+    fmt_money,
+    fmt_pct,
+    fmt_ratio,
+    round_to,
+    to_decimal,
+)
 from uwhelper.metrics.finance import (
     LoanMathError,
     amortization_schedule,

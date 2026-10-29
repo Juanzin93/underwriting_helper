@@ -6,4 +6,6 @@ python-multipart>=0.0.9
 pydantic>=2.6
 pyyaml>=6.0
 httpx>=0.27
-pymupdf>=1.24.3,<2   # 2.x adds onnxruntime/numpy/networkx the app does not use
+pypdfium2>=4.30,<6   # PDF reading/rendering (PDFium; BSD-3 / Apache-2.0)
+pillow>=10.4         # images for OCR and page previews (MIT-CMU)
+reportlab>=4.2,<6    # PDF writing: reports, memos, sample documents (BSD)

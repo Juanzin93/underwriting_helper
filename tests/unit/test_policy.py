@@ -1,6 +1,5 @@
 from datetime import date
 from decimal import Decimal as D
-from pathlib import Path
 
 import pytest
 import yaml

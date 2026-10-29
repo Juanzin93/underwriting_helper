@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-import pymupdf
 from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import FileResponse, Response
 from starlette.datastructures import UploadFile
@@ -12,6 +11,7 @@ from starlette.datastructures import UploadFile
 from uwhelper.config import Settings
 from uwhelper.db.connection import Database
 from uwhelper.documents import service
+from uwhelper.documents.pdf import open_document
 from uwhelper.documents.storage import UploadRejected
 from uwhelper.llm.client import client_from_settings
 from uwhelper.llm.extraction import extract_document_facts, list_extraction_runs
@@ -91,10 +91,10 @@ async def page_image(request: Request, case_id: str, document_id: str, page_numb
         return Response(status_code=404)
     path = service.document_path(settings, doc)
     try:
-        with pymupdf.open(path) as pdf:
+        with open_document(path, doc["file_ext"]) as pdf:
             if not 1 <= page_number <= pdf.page_count:
                 return Response(status_code=404)
-            png = pdf[page_number - 1].get_pixmap(dpi=110).tobytes("png")
+            png = pdf.render_png(page_number - 1, dpi=110)
     except Exception:
         return Response(status_code=404)
     return Response(png, media_type="image/png")

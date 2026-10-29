@@ -34,7 +34,7 @@ triggers; the LLM never authors a number that is used without human verification
 | Risk | Impact | Mitigation / plan |
 |---|---|---|
 | **No authentication; "authorized by" is a typed name** | Fine for one person; not acceptable once staff share an install | M2 records the Windows account (or `UWH_ACTOR_NAME`) as actor — attribution, not authentication. Local accounts are required before any multi-user use |
-| **PyMuPDF is AGPL-3.0** | Using it privately is fine; distributing the app to clients/partners as part of a brokerage business triggers AGPL obligations | Decide before distribution: keep source available, buy an Artifex licence, or swap to pypdfium2 (Apache/BSD) behind `documents/pdf.py` |
+| ~~PyMuPDF is AGPL-3.0~~ | — | **Resolved in M8.2**: replaced by pypdfium2 + ReportLab + Pillow (permissive); see LICENSING.md |
 | Two pipelines: `deals.status` (brokerage) and `loan_cases.stage` (underwriting lifecycle) | Users could see contradictory states | **Resolved in M2**: recorded sync rules and guards (docs/LIFECYCLE.md) |
 | Borrower duplicated in `borrowers` (per case) and `organizations` | Data drift | **Resolved in M2**: every file borrower links to an organization (backfilled) |
 | No encryption at rest | Disk theft exposes borrower data | BitLocker/VeraCrypt (docs/SECURITY.md); `UWH_DB_FILE` now allows an encrypted volume |

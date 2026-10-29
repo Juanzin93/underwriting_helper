@@ -1,7 +1,12 @@
 from decimal import Decimal as D
 
 from tests.conftest import base_inputs, iv
-from uwhelper.metrics.types import CollateralInput, DebtInput, GuarantorInput, InputValue
+from uwhelper.metrics.types import (
+    CollateralInput,
+    DebtInput,
+    GuarantorInput,
+    InputValue,
+)
 from uwhelper.modules import get_module
 
 M = get_module("commercial")

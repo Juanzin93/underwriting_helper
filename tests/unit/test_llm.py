@@ -4,12 +4,12 @@ import io
 import json
 
 import httpx
-import pymupdf
 import pytest
 
 from tests.conftest import make_case
 from uwhelper.config import ConfigError, load_settings
 from uwhelper.documents.injection import scan_text
+from uwhelper.documents.pdfwrite import lines_pdf
 from uwhelper.documents.service import import_document
 from uwhelper.llm.client import (
     OllamaBadResponse,
@@ -66,11 +66,7 @@ def client(fake) -> OllamaClient:
 
 
 def pdf(lines) -> bytes:
-    d = pymupdf.open()
-    p = d.new_page()
-    for i, line in enumerate(lines):
-        p.insert_text((72, 72 + 16 * i), line)
-    return d.tobytes()
+    return lines_pdf(list(lines))
 
 
 @pytest.fixture

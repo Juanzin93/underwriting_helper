@@ -1,9 +1,9 @@
 import re
 
-import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 
+from uwhelper.documents.pdfwrite import lines_pdf
 from uwhelper.web.app import create_app
 
 
@@ -59,9 +59,7 @@ def test_create_case_and_validation_errors(client, app):
 
 def test_full_workflow_upload_verify_run_report(client, app):
     cid = new_case(client, app)
-    d = pymupdf.open()
-    d.new_page().insert_text((72, 72), "Revenue 1,000,000")
-    files = {"files": ("is.pdf", d.tobytes(), "application/pdf")}
+    files = {"files": ("is.pdf", lines_pdf(["Revenue 1,000,000"]), "application/pdf")}
     r = client.post(f"/cases/{cid}/documents?csrf_token={app.state.csrf_token}", data={"doc_type": "income_statement"},
                     files=files, follow_redirects=False)
     assert r.status_code == 303 and "imported" in r.headers["location"]

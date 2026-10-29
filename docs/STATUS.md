@@ -176,3 +176,17 @@ Known limitations added in M7:
 * Brokered-loan dates assume calendar-month terms from the funding date; lender documents may define dates differently.
 * Payoff quotes use simple daily interest at the current schedule rate; no prepayment penalties, escrow or
   late-fee accrual are included.
+
+## Platform Milestone 8.2 — PDF library switched (licensing) ✅
+
+PyMuPDF (AGPL-3.0) was replaced by **pypdfium2** (PDFium; reading, text, page images, password detection),
+**Pillow** (image uploads, multi-page TIFF, oversized-image refusal) and **ReportLab** (report, memo, deal-memo and
+sample PDFs, through a converter for the app's own HTML templates). Generated PDFs embed a Unicode font found on the
+PC (Arial/Segoe UI on Windows) and are byte-identical for the same input. No AGPL or GPL package remains in
+`requirements.lock` (checked from installed package metadata).
+
+Test run: **357 passed, 2 skipped** (also in a fresh virtual environment installed from the new lock, with PyMuPDF
+absent). New tests: `tests/unit/test_pdf_backend.py` (8). Report pages were rendered and inspected visually.
+
+Notes: PDF text order now follows the document's content order (PDFium) rather than PyMuPDF's sorted order; extraction
+tests and OCR tests are unchanged and pass. Report PDFs use a simpler layout engine than before (same content).

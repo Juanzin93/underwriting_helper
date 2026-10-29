@@ -3,7 +3,7 @@
 A personal analytical and workflow tool that follows a commercial loan from intake through underwriting, credit review,
 structuring, due diligence, closing, funding and servicing — entirely on your Windows PC:
 
-* imports PDFs/images, reads text with PyMuPDF and local **Tesseract** OCR, tracks every page and SHA-256;
+* imports PDFs/images, reads text with PDFium (pypdfium2) and local **Tesseract** OCR, tracks every page and SHA-256;
 * extracts **candidate** facts with a **local Ollama model** (default `qwen3:8b`) — never a cloud API;
 * lets you compare each value with its source page, **verify / correct / reject** it (full history kept);
 * detects **contradictions** between sources and never picks a value for you;
@@ -182,10 +182,10 @@ src/uwhelper/
   workflow/            lifecycle gates, run currency, human decisions & term sets, conditions, closing/funding
   servicing/           schedules, payments ledger, delinquency, modifications, covenants, alerts, portfolio
   structuring.py       saved loan structures (engine: metrics/structuring.py)
-  documents/           safe upload storage, PyMuPDF/OCR extraction, injection heuristics
+  documents/           safe upload storage, PDF reading (pdf.py: pypdfium2/Pillow), OCR, injection heuristics
   llm/                 local Ollama client, structured extraction, optional narrative
   repo/                data access for cases, facts (append-only), audit log
-  reports/             screening report + credit memo (HTML templates, PDF via PyMuPDF Story)
+  reports/             screening report + credit memo (HTML templates; PDF via ReportLab, pdfrender.py)
   web/                 FastAPI app, security middleware, routes, Jinja2 templates, local CSS/JS
   backup.py cli.py diagnostics.py sample_data.py
 policies/              versioned YAML policies (illustrative demo)

@@ -1,32 +1,28 @@
 import io
 
-import pymupdf
 import pytest
 
 from tests.conftest import HAS_TESSERACT, make_case
 from uwhelper.documents import ocr as ocr_mod
+from uwhelper.documents import pdfwrite as W
 from uwhelper.documents.extract import extract_document
-from uwhelper.documents.service import get_pages, import_document, list_case_documents, process_document, remove_document
+from uwhelper.documents.service import (
+    get_pages,
+    import_document,
+    list_case_documents,
+    process_document,
+    remove_document,
+)
 from uwhelper.documents.storage import UploadRejected, safe_display_name, stage_upload
 from uwhelper.repo.cases import ValidationFailure
 
 
 def text_pdf(lines=("Revenue 1,234,567",), pages=1) -> bytes:
-    d = pymupdf.open()
-    for _ in range(pages):
-        p = d.new_page()
-        for i, line in enumerate(lines):
-            p.insert_text((72, 72 + 16 * i), line)
-    return d.tobytes()
+    return W.text_pdf([("", list(lines))] * pages)
 
 
 def scanned_pdf(text="Total price: $600,000") -> bytes:
-    tmp = pymupdf.open()
-    tmp.new_page().insert_text((72, 100), text, fontsize=20)
-    png = tmp[0].get_pixmap(dpi=200).tobytes("png")
-    d = pymupdf.open()
-    d.new_page().insert_image(pymupdf.Rect(0, 0, 612, 792), stream=png)
-    return d.tobytes()
+    return W.scanned_pdf([("", [text])])
 
 
 def test_text_pdf_page_tracking_and_hash(conn, settings):
@@ -83,9 +79,7 @@ def test_ocr_failure_handled(tmp_path, monkeypatch):
 
 
 def test_password_protected_pdf(conn, settings):
-    d = pymupdf.open()
-    d.new_page().insert_text((72, 72), "Secret revenue 10")
-    data = d.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, owner_pw="o", user_pw="pw")
+    data = W.lines_pdf(["Secret revenue 10"], password="pw")
     cid = make_case(conn)
     res = import_document(conn, settings, cid, io.BytesIO(data), "locked.pdf")
     assert res.status == "encrypted"

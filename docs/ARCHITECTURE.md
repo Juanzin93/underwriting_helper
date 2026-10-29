@@ -19,7 +19,7 @@ web (FastAPI + Jinja2, CSRF/Host/Origin middleware)
         ├── modules/commercial (field catalog, loan types, checklist)   ← extension point
         ├── metrics (finance math, commercial metrics)
         └── policy (schema, loader, engine)
-  └── documents (storage, PyMuPDF, Tesseract) ── llm (Ollama client, extraction, narrative)
+  └── documents (storage, PDFium via pypdfium2, Pillow, Tesseract) ── llm (Ollama client, extraction, narrative)
   └── repo (cases, facts, audit) ── db (connection, migrations)
 ```
 

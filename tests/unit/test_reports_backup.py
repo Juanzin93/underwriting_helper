@@ -1,14 +1,14 @@
 import zipfile
 
-import pymupdf
 import pytest
 
 from uwhelper.analysis.underwriting import run_underwriting
 from uwhelper.backup import BackupError, create_backup, restore_backup
 from uwhelper.config import load_settings
+from uwhelper.documents.pdf import page_count, text_of
 from uwhelper.llm.narrative import Narrative
-from uwhelper.reports.builder import build_context, generate_report, render_html
 from uwhelper.repo import cases
+from uwhelper.reports.builder import build_context, generate_report, render_html
 from uwhelper.sample_data import load_sample_case
 
 
@@ -34,9 +34,9 @@ def test_report_files_and_versions(conn, settings, sample):
     out1 = generate_report(conn, settings, sample, run.run_id)
     out2 = generate_report(conn, settings, sample, run.run_id, ("pdf",))
     assert {o["format"] for o in out1} == {"html", "pdf"} and out2[0]["version"] == 2
-    pdf = pymupdf.open(settings.reports_dir / sample / "report_v1.pdf")
-    text = "".join(p.get_text() for p in pdf)
-    assert pdf.page_count > 2 and "PRELIMINARY SCREENING" in text and "Preliminary Credit Analysis" in text
+    data = (settings.reports_dir / sample / "report_v1.pdf").read_bytes()
+    text = text_of(data)
+    assert page_count(data) > 2 and "PRELIMINARY SCREENING" in text and "Preliminary Credit Analysis" in text
 
 
 def test_report_escapes_html_from_data(conn, settings):

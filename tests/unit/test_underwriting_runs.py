@@ -1,10 +1,9 @@
-import json
 import sqlite3
 
 import pytest
 import yaml
 
-from tests.conftest import add_verified_financials, make_case
+from tests.conftest import make_case
 from uwhelper.analysis import underwriting as uw
 from uwhelper.analysis.underwriting import RunError, get_run, run_underwriting
 from uwhelper.config import PROJECT_ROOT

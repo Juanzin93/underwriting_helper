@@ -6,7 +6,6 @@ import sqlite3
 from pathlib import Path
 
 import httpx
-import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 
@@ -20,6 +19,7 @@ from uwhelper.db.migrate import (
     current_version,
     discover,
 )
+from uwhelper.documents.pdfwrite import lines_pdf
 from uwhelper.integrations import (
     IntegrationDisabled,
     IntegrationSpec,
@@ -67,9 +67,7 @@ def api(app, client):
 
 
 def pdf_bytes(text="Revenue 1,000") -> bytes:
-    d = pymupdf.open()
-    d.new_page().insert_text((72, 72), text)
-    return d.tobytes()
+    return lines_pdf([text])
 
 
 def make_org(api, name="Acme Fabrication LLC (FICTIONAL)", org_type="borrower_business"):

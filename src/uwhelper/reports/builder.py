@@ -10,13 +10,11 @@ number-checked.
 from __future__ import annotations
 
 import hashlib
-import io
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import pymupdf
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from uwhelper import ENGINE_VERSION, __version__
@@ -154,44 +152,11 @@ def render_html(context: dict[str, Any], *, for_pdf: bool = False) -> str:
     return _env().get_template("report.html").render(**context, for_pdf=for_pdf)
 
 
-PDF_CSS = """
-* { font-family: sans-serif; }
-body { font-size: 9pt; color: #111; }
-h1 { font-size: 16pt; margin: 0 0 4pt 0; }
-h2 { font-size: 12pt; margin: 12pt 0 4pt 0; border-bottom: 1px solid #555; }
-h3 { font-size: 10pt; margin: 8pt 0 3pt 0; }
-table { border-collapse: collapse; width: 100%; margin-bottom: 6pt; }
-th, td { border: 1px solid #999; padding: 2pt 3pt; font-size: 8pt; vertical-align: top; text-align: left; }
-th { background-color: #e8e8e8; }
-.banner { border: 2px solid #000; padding: 4pt; font-weight: bold; }
-.small { font-size: 7.5pt; color: #333; }
-"""
+def render_pdf(html: str, title: str = "Preliminary Credit Analysis") -> bytes:
+    """PDF from report HTML (ReportLab, BSD licence; see reports/pdfrender.py)."""
+    from uwhelper.reports.pdfrender import render_pdf as _render
 
-
-def render_pdf(html: str) -> bytes:
-    buf = io.BytesIO()
-    story = pymupdf.Story(html=html, user_css=PDF_CSS)
-    writer = pymupdf.DocumentWriter(buf)
-    mediabox = pymupdf.paper_rect("letter")
-    where = mediabox + (40, 40, -40, -50)
-    more = True
-    while more:
-        device = writer.begin_page(mediabox)
-        more, _ = story.place(where)
-        story.draw(device)
-        writer.end_page()
-    writer.close()
-    # Footer with page numbers and the non-decision disclaimer on every page.
-    doc = pymupdf.open("pdf", buf.getvalue())
-    total = doc.page_count
-    for i, page in enumerate(doc, start=1):
-        page.insert_text((40, page.rect.height - 25),
-                         f"PRELIMINARY SCREENING — NOT A CREDIT DECISION — page {i} of {total}",
-                         fontsize=7, fontname="helv")
-    doc.set_metadata({"title": "Preliminary Credit Analysis", "producer": "UW Helper (local)", "creator": "UW Helper"})
-    out = doc.tobytes(garbage=3, deflate=True)
-    doc.close()
-    return out
+    return _render(html, title=title)
 
 
 def generate_report(conn: sqlite3.Connection, settings: Settings, case_id: str, run_id: str,

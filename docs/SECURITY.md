@@ -12,7 +12,7 @@ the data directory and talk to `127.0.0.1`.
 | No telemetry | No analytics, crash reporting, CDNs, web fonts or remote logs; API docs (which load CDN assets) disabled; CSP `default-src 'self'` |
 | Browser attacks on localhost | CSRF token on every state change, Origin check, Host allow-list (DNS rebinding), `X-Frame-Options: DENY`, `frame-ancestors 'none'`, no inline scripts |
 | Uploads | Extension allow-list + magic-byte check, size limit (50 MB default), page limit, hash-named storage (no path traversal), originals served only as downloads |
-| Document content | Never executed; PDFs parsed by PyMuPDF; text rendered escaped (Jinja autoescape); report pages get a no-script CSP |
+| Document content | Never executed; PDFs parsed by PDFium (pypdfium2), images by Pillow (decompression-bomb limit); text rendered escaped (Jinja autoescape); report pages get a no-script CSP |
 | Prompt injection | Delimited data with per-request nonce, delimiter spoofing neutralised, system prompt forbids following document instructions, JSON-schema output, per-fact validation, unknown fields dropped, value must appear on cited page, heuristic page flagging, model has no tools, **nothing used until a human verifies** |
 | SQL injection | Parameterised SQL only; Pydantic validation of every form |
 | Integrity | Immutable facts/runs/policies/decisions/fundings/payments/audit (DB triggers), corrections append-only, transactions for every multi-row write |
@@ -60,6 +60,6 @@ events and recompute all hashes. To detect that, periodically record the head ha
 * The local model can misread or mis-map numbers; verification is the control — do not bulk-verify blindly.
 * Heuristic injection detection can miss attacks; it is a warning only.
 * OCR errors can change digits; compare with the page image.
-* PDF rendering libraries (PyMuPDF/MuPDF) process untrusted files; keep them updated.
+* PDF/image libraries (PDFium via pypdfium2, Pillow) process untrusted files; keep them updated (`requirements.lock`).
 * Ollama itself listens on 127.0.0.1:11434 without authentication; other local processes can use it.
 * Ollama may check for its own updates; that is outside this app (see LOCAL_ONLY_CHECKLIST.md).

@@ -14,7 +14,6 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -31,10 +30,10 @@ from uwhelper.documents.service import list_case_documents
 from uwhelper.llm.narrative import Narrative
 from uwhelper.modules import get_module
 from uwhelper.presentation import register_filters
-from uwhelper.reports.builder import HUMAN_REVIEW_CHECKLIST, LIMITATIONS, render_pdf
 from uwhelper.repo import audit
 from uwhelper.repo import cases as cases_repo
 from uwhelper.repo import facts as facts_repo
+from uwhelper.reports.builder import HUMAN_REVIEW_CHECKLIST, LIMITATIONS, render_pdf
 
 GENERATOR_VERSION = "credit-memo/1.0.0"
 TEMPLATES = Path(__file__).parent / "templates"
